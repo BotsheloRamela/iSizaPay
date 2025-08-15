@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -77,6 +79,25 @@ class P2PService extends ChangeNotifier {
       Permission.location,
       Permission.locationWhenInUse,
     ];
+
+    // For Android 12+ (API 31+), use new Bluetooth permissions
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      if (androidInfo.version.sdkInt >= 31) {
+        permissions.addAll([
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+          Permission.bluetoothAdvertise,
+        ]);
+      } else {
+        permissions.add(Permission.bluetooth);
+      }
+
+      // For Android 13+ (API 33+), add nearby WiFi devices
+      if (androidInfo.version.sdkInt >= 33) {
+        permissions.add(Permission.nearbyWifiDevices);
+      }
+    }
 
     // Check Bluetooth permissions
     final bluetoothScanStatus = await Permission.bluetoothScan.status;
