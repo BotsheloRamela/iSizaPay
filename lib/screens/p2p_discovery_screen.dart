@@ -59,17 +59,41 @@ class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
               return PopupMenuButton<String>(
                 onSelected: _handleMenuAction,
                 itemBuilder: (context) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'start_discovery',
-                    child: Text('Start Discovery'),
+                    enabled: service.status == P2PConnectionStatus.disconnected,
+                    child: Text(
+                      'Start Discovery',
+                      style: TextStyle(
+                        color: service.status == P2PConnectionStatus.disconnected
+                            ? null
+                            : Colors.grey,
+                      ),
+                    ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'start_advertising',
-                    child: Text('Start Advertising'),
+                    enabled: service.status == P2PConnectionStatus.disconnected,
+                    child: Text(
+                      'Start Advertising',
+                      style: TextStyle(
+                        color: service.status == P2PConnectionStatus.disconnected
+                            ? null
+                            : Colors.grey,
+                      ),
+                    ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'stop_all',
-                    child: Text('Stop All'),
+                    enabled: service.status != P2PConnectionStatus.disconnected,
+                    child: Text(
+                      'Stop All',
+                      style: TextStyle(
+                        color: service.status != P2PConnectionStatus.disconnected
+                            ? null
+                            : Colors.grey,
+                      ),
+                    ),
                   ),
                 ],
               );
@@ -92,11 +116,14 @@ class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
       ),
       floatingActionButton: Consumer<P2PService>(
         builder: (context, service, child) {
+          final isDisconnected = service.status == P2PConnectionStatus.disconnected;
           return FloatingActionButton(
-            onPressed: service.status == P2PConnectionStatus.disconnected
-                ? _startDiscoveryWithPermissionGuide
-                : null,
-            child: const Icon(Icons.search),
+            onPressed: isDisconnected ? _startDiscoveryWithPermissionGuide : null,
+            backgroundColor: isDisconnected ? null : Colors.grey.shade300,
+            child: Icon(
+              Icons.search,
+              color: isDisconnected ? null : Colors.grey.shade600,
+            ),
           );
         },
       ),
@@ -145,7 +172,7 @@ class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
+        color: statusColor.withValues(alpha: 0.1),
         border: Border.all(color: statusColor, width: 1),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -407,29 +434,59 @@ class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
   }
 
   Future<void> _startDiscoveryWithPermissionGuide() async {
-    final shouldProceed = await PermissionGuideDialog.show(context);
-    if (shouldProceed) {
+    // Check if permissions are already granted
+    final permissionStatus = await _p2pService.checkPermissionStatus();
+    final allGranted = permissionStatus.values.every((granted) => granted);
+    
+    if (allGranted) {
+      // Permissions already granted, start discovery directly
       _p2pService.startDiscovery();
+    } else {
+      // Show permission guide only if permissions are needed
+      if (mounted) {
+        final shouldProceed = await PermissionGuideDialog.show(context);
+        if (shouldProceed) {
+          _p2pService.startDiscovery();
+        }
+      }
     }
   }
 
   Future<void> _startAdvertisingWithPermissionGuide() async {
-    final shouldProceed = await PermissionGuideDialog.show(context);
-    if (shouldProceed) {
+    // Check if permissions are already granted
+    final permissionStatus = await _p2pService.checkPermissionStatus();
+    final allGranted = permissionStatus.values.every((granted) => granted);
+    
+    if (allGranted) {
+      // Permissions already granted, start advertising directly
       _p2pService.startAdvertising();
+    } else {
+      // Show permission guide only if permissions are needed
+      if (mounted) {
+        final shouldProceed = await PermissionGuideDialog.show(context);
+        if (shouldProceed) {
+          _p2pService.startAdvertising();
+        }
+      }
     }
   }
 
   void _handleMenuAction(String action) {
     switch (action) {
       case 'start_discovery':
-        _startDiscoveryWithPermissionGuide();
+        if (_p2pService.status == P2PConnectionStatus.disconnected) {
+          _startDiscoveryWithPermissionGuide();
+        }
         break;
       case 'start_advertising':
-        _startAdvertisingWithPermissionGuide();
+        if (_p2pService.status == P2PConnectionStatus.disconnected) {
+          _startAdvertisingWithPermissionGuide();
+        }
         break;
       case 'stop_all':
-        _p2pService.stopAll();
+        if (_p2pService.status != P2PConnectionStatus.disconnected) {
+          _p2pService.stopAll();
+        }
         break;
     }
   }

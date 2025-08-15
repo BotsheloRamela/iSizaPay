@@ -67,14 +67,16 @@ class P2PService extends ChangeNotifier {
     _updateStatus(P2PConnectionStatus.error);
   }
 
-  Future<bool> _requestPermissions() async {
+  Future<bool> _checkAndRequestPermissions() async {
+    // First check if permissions are already granted
     final permissions = <Permission>[
       Permission.location,
       Permission.locationWhenInUse,
     ];
 
-    // Add Bluetooth permissions for Android 12+ (API 31+)
-    if (await Permission.bluetoothScan.request().isGranted) {
+    // Check Bluetooth permissions
+    final bluetoothScanStatus = await Permission.bluetoothScan.status;
+    if (bluetoothScanStatus.isGranted) {
       permissions.addAll([
         Permission.bluetoothScan,
         Permission.bluetoothConnect,
@@ -82,31 +84,45 @@ class P2PService extends ChangeNotifier {
       ]);
     } else {
       // For older Android versions
-      permissions.addAll([
-        Permission.bluetooth,
-      ]);
+      permissions.add(Permission.bluetooth);
     }
 
-    // Add WiFi permissions for Android 13+ (API 33+)
-    if (await Permission.nearbyWifiDevices.request().isGranted) {
+    // Check WiFi permissions
+    final nearbyWifiStatus = await Permission.nearbyWifiDevices.status;
+    if (nearbyWifiStatus.isGranted) {
       permissions.add(Permission.nearbyWifiDevices);
     }
 
-    // Note: ACCESS_WIFI_STATE and CHANGE_WIFI_STATE are normal permissions
-    // and don't need to be requested at runtime - they're granted at install time
+    // Check if all permissions are already granted
+    bool allGranted = true;
+    for (final permission in permissions) {
+      final status = await permission.status;
+      if (!status.isGranted) {
+        allGranted = false;
+        break;
+      }
+    }
 
+    // If all permissions are granted, return early
+    if (allGranted) {
+      return true;
+    }
+
+    // Request only the permissions that are not granted
     final Map<Permission, PermissionStatus> statuses = {};
     final List<String> deniedPermissions = [];
 
-    // Request all permissions
     for (final permission in permissions) {
-      final status = await permission.request();
-      statuses[permission] = status;
-      
-      debugPrint('Permission ${permission.toString()}: ${status.toString()}');
-      
-      if (!status.isGranted) {
-        deniedPermissions.add(_getPermissionName(permission));
+      final currentStatus = await permission.status;
+      if (!currentStatus.isGranted) {
+        final status = await permission.request();
+        statuses[permission] = status;
+        
+        debugPrint('Permission ${permission.toString()}: ${status.toString()}');
+        
+        if (!status.isGranted) {
+          deniedPermissions.add(_getPermissionName(permission));
+        }
       }
     }
 
@@ -166,7 +182,13 @@ class P2PService extends ChangeNotifier {
 
   Future<void> startDiscovery() async {
     try {
-      if (!await _requestPermissions()) {
+      // Don't start if already discovering or advertising
+      if (_status == P2PConnectionStatus.discovering ||
+          _status == P2PConnectionStatus.advertising) {
+        return;
+      }
+
+      if (!await _checkAndRequestPermissions()) {
         _setError('Required permissions not granted');
         return;
       }
@@ -199,7 +221,13 @@ class P2PService extends ChangeNotifier {
 
   Future<void> startAdvertising() async {
     try {
-      if (!await _requestPermissions()) {
+      // Don't start if already discovering or advertising
+      if (_status == P2PConnectionStatus.discovering ||
+          _status == P2PConnectionStatus.advertising) {
+        return;
+      }
+
+      if (!await _checkAndRequestPermissions()) {
         _setError('Required permissions not granted');
         return;
       }

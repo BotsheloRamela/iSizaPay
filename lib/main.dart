@@ -106,8 +106,19 @@ class _MyHomePageState extends State<MyHomePage> {
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () async {
-                        final shouldProceed = await PermissionGuideDialog.show(context);
-                        if (shouldProceed && context.mounted) {
+                        // Check if permissions are already granted before showing dialog
+                        final p2pService = Provider.of<P2PService>(context, listen: false);
+                        final permissionStatus = await p2pService.checkPermissionStatus();
+                        final allGranted = permissionStatus.values.every((granted) => granted);
+                        
+                        bool shouldNavigate = true;
+                        
+                        if (!allGranted && context.mounted) {
+                          // Only show permission guide if permissions are needed
+                          shouldNavigate = await PermissionGuideDialog.show(context);
+                        }
+                        
+                        if (shouldNavigate && context.mounted) {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const P2PDiscoveryScreen(),
