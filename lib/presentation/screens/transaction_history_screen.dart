@@ -15,22 +15,58 @@ class TransactionHistoryScreen extends StatelessWidget {
         actions: [
           Consumer<PaymentService>(
             builder: (context, paymentService, child) {
-              return PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'clear_history') {
-                    _showClearHistoryDialog(context, paymentService);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'clear_history',
-                    child: Row(
-                      children: [
-                        Icon(Icons.clear_all, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Clear History'),
-                      ],
+              final pendingCount = paymentService.getPendingBlockchainTransactions().length;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (pendingCount > 0)
+                    IconButton(
+                      onPressed: () => _syncWithBlockchain(context, paymentService),
+                      icon: Stack(
+                        children: [
+                          const Icon(Icons.sync),
+                          if (pendingCount > 0)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '$pendingCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      tooltip: 'Sync $pendingCount pending transactions',
                     ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'clear_history') {
+                        _showClearHistoryDialog(context, paymentService);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'clear_history',
+                        child: Row(
+                          children: [
+                            Icon(Icons.clear_all, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Clear History'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               );
@@ -92,7 +128,7 @@ class TransactionHistoryScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _buildSummaryItem(
-                      'Current Balance',
+                      'Available Balance',
                       '\$${paymentService.balance.toStringAsFixed(2)}',
                       Icons.account_balance_wallet,
                       Colors.green,
@@ -101,10 +137,10 @@ class TransactionHistoryScreen extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildSummaryItem(
-                      'Total Sent',
-                      '\$${totalSent.toStringAsFixed(2)}',
-                      Icons.arrow_upward,
-                      Colors.red,
+                      'Confirmed Balance',
+                      '\$${paymentService.confirmedBalance.toStringAsFixed(2)}',
+                      Icons.verified,
+                      Colors.blue,
                     ),
                   ),
                 ],
@@ -114,8 +150,8 @@ class TransactionHistoryScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _buildSummaryItem(
-                      'Completed',
-                      '$completedRequests',
+                      'Confirmed Txs',
+                      '${paymentService.confirmedTransactions.length}',
                       Icons.check_circle,
                       Colors.green,
                     ),
@@ -123,8 +159,8 @@ class TransactionHistoryScreen extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildSummaryItem(
-                      'Pending',
-                      '$pendingRequests',
+                      'Pending Txs',
+                      '${paymentService.pendingTransactions.length}',
                       Icons.schedule,
                       Colors.orange,
                     ),
@@ -317,14 +353,14 @@ class TransactionHistoryScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.green.shade100,
+                color: _getTransactionStatusColor(transaction.status).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                'Completed',
+                _getTransactionStatusText(transaction.status),
                 style: TextStyle(
                   fontSize: 10,
-                  color: Colors.green.shade700,
+                  color: _getTransactionStatusColor(transaction.status),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -457,6 +493,35 @@ class TransactionHistoryScreen extends StatelessWidget {
     }
   }
 
+  Color _getTransactionStatusColor(TransactionStatus status) {
+    switch (status) {
+      case TransactionStatus.pendingOffline:
+        return Colors.orange;
+      case TransactionStatus.pendingBlockchain:
+        return Colors.blue;
+      case TransactionStatus.confirmed:
+        return Colors.green;
+      case TransactionStatus.failed:
+      case TransactionStatus.rejected:
+        return Colors.red;
+    }
+  }
+
+  String _getTransactionStatusText(TransactionStatus status) {
+    switch (status) {
+      case TransactionStatus.pendingOffline:
+        return 'Pending';
+      case TransactionStatus.pendingBlockchain:
+        return 'Submitting';
+      case TransactionStatus.confirmed:
+        return 'Confirmed';
+      case TransactionStatus.failed:
+        return 'Failed';
+      case TransactionStatus.rejected:
+        return 'Rejected';
+    }
+  }
+
   void _showTransactionDetails(Transaction transaction) {
     // This would show a detailed transaction view
     // For now, we'll keep it simple
@@ -465,6 +530,83 @@ class TransactionHistoryScreen extends StatelessWidget {
   void _showPaymentRequestDetails(PaymentRequest request) {
     // This would show detailed payment request info
     // For now, we'll keep it simple
+  }
+
+  void _syncWithBlockchain(BuildContext context, PaymentService paymentService) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sync with Blockchain'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Submit ${paymentService.getPendingBlockchainTransactions().length} pending transactions to Solana blockchain?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                border: Border.all(color: Colors.blue.shade200),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info, size: 16, color: Colors.blue.shade600),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'This requires internet connection',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.schedule, size: 16, color: Colors.blue.shade600),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Transactions will be confirmed in 10-30 seconds',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              paymentService.syncWithBlockchain();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Syncing with blockchain...'),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Sync Now'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showClearHistoryDialog(BuildContext context, PaymentService paymentService) {

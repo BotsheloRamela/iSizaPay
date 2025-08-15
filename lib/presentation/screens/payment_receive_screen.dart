@@ -48,7 +48,7 @@ class _PaymentReceiveScreenState extends State<PaymentReceiveScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Current Balance',
+                'Available Balance',
                 style: TextStyle(
                   color: Colors.green.shade800,
                   fontSize: 16,
@@ -61,6 +61,14 @@ class _PaymentReceiveScreenState extends State<PaymentReceiveScreen> {
                   color: Colors.green.shade900,
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Confirmed: \$${paymentService.confirmedBalance.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: Colors.green.shade600,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -278,7 +286,7 @@ class _PaymentReceiveScreenState extends State<PaymentReceiveScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: paymentService.balance >= request.amount
+                    onPressed: paymentService.confirmedBalance >= request.amount
                         ? () => _showAcceptDialog(request, paymentService, p2pService)
                         : null,
                     icon: const Icon(Icons.check),
@@ -291,7 +299,7 @@ class _PaymentReceiveScreenState extends State<PaymentReceiveScreen> {
                 ),
               ],
             ),
-            if (paymentService.balance < request.amount)
+            if (paymentService.confirmedBalance < request.amount)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Container(
@@ -307,7 +315,7 @@ class _PaymentReceiveScreenState extends State<PaymentReceiveScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Insufficient balance to fulfill this request',
+                          'Insufficient confirmed balance to fulfill this request',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.red.shade800,
@@ -351,16 +359,40 @@ class _PaymentReceiveScreenState extends State<PaymentReceiveScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Current Balance:'),
-                      Text('\$${paymentService.balance.toStringAsFixed(2)}'),
+                      const Text('Confirmed Balance:'),
+                      Text('\$${paymentService.confirmedBalance.toStringAsFixed(2)}'),
                     ],
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('After Payment:'),
-                      Text('\$${(paymentService.balance - request.amount).toStringAsFixed(2)}'),
+                      Text('\$${(paymentService.confirmedBalance - request.amount).toStringAsFixed(2)}'),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      border: Border.all(color: Colors.orange.shade200),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info, size: 16, color: Colors.orange.shade600),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Payment will be pending until confirmed on blockchain',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange.shade800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -391,11 +423,11 @@ class _PaymentReceiveScreenState extends State<PaymentReceiveScreen> {
   Future<void> _acceptPaymentRequest(PaymentRequest request, PaymentService paymentService, P2PService p2pService) async {
     try {
       // Accept the payment request (this creates and processes the transaction)
-      paymentService.acceptPaymentRequest(request.id, p2pService.currentDeviceId!);
+      final transaction = paymentService.acceptPaymentRequest(request.id, p2pService.currentDeviceId!);
 
-      // Send response back to requester
-      final responseMessage = paymentService.getPaymentResponseMessage(request.id, true);
-      await p2pService.sendMessage(request.fromDevice, jsonEncode(responseMessage));
+      // Send the actual transaction to the requester (so they receive the money)
+      final transactionMessage = paymentService.getTransactionMessage(transaction);
+      await p2pService.sendMessage(request.fromDevice, jsonEncode(transactionMessage));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

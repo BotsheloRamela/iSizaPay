@@ -78,12 +78,40 @@ class PaymentService extends ChangeNotifier {
   final List<PaymentRequest> _paymentRequests = [];
   final List<PaymentRequest> _incomingRequests = [];
   
-  num _balance = 1000.0; // Starting balance for demo
-
+  num _confirmedBalance = 1000.0; // Starting balance for demo - only confirmed transactions
+  
   List<Transaction> get transactions => List.unmodifiable(_transactions);
   List<PaymentRequest> get paymentRequests => List.unmodifiable(_paymentRequests);
   List<PaymentRequest> get incomingRequests => List.unmodifiable(_incomingRequests);
-  num get balance => _balance;
+  
+  // Confirmed balance - only includes blockchain-confirmed transactions
+  num get confirmedBalance => _confirmedBalance;
+  
+  // Available balance - includes pending incoming transactions (trust float)
+  num get availableBalance {
+    final pendingIncoming = _transactions
+        .where((t) => t.status == TransactionStatus.pendingOffline && t.toDevice == getCurrentDeviceId())
+        .map((t) => t.amount)
+        .fold<num>(0, (sum, amount) => sum + amount);
+    
+    return _confirmedBalance + pendingIncoming;
+  }
+  
+  // For backward compatibility and display
+  num get balance => availableBalance;
+  
+  // Separate getters for different transaction types
+  List<Transaction> get confirmedTransactions => 
+    _transactions.where((t) => t.status == TransactionStatus.confirmed).toList();
+  
+  List<Transaction> get pendingTransactions => 
+    _transactions.where((t) => t.status != TransactionStatus.confirmed).toList();
+  
+  String? getCurrentDeviceId() {
+    // This would be implemented to get current device ID
+    // For now returning null, should be injected from P2PService
+    return null;
+  }
 
   String _generateTransactionId() {
     final random = Random();
@@ -111,8 +139,8 @@ class PaymentService extends ChangeNotifier {
       throw ArgumentError('Amount must be greater than 0');
     }
 
-    if (amount > _balance) {
-      throw ArgumentError('Insufficient balance');
+    if (amount > _confirmedBalance) {
+      throw ArgumentError('Insufficient confirmed balance');
     }
 
     final request = PaymentRequest(
@@ -137,31 +165,32 @@ class PaymentService extends ChangeNotifier {
     }
   }
 
-  void acceptPaymentRequest(String requestId, String currentDeviceId) {
+  Transaction acceptPaymentRequest(String requestId, String currentDeviceId) {
     final requestIndex = _incomingRequests.indexWhere((r) => r.id == requestId);
-    if (requestIndex == -1) return;
+    if (requestIndex == -1) throw ArgumentError('Payment request not found');
 
     final request = _incomingRequests[requestIndex];
     
-    // Check if we have sufficient balance to send
-    if (request.amount > _balance) {
+    // Check if we have sufficient confirmed balance to send
+    if (request.amount > _confirmedBalance) {
       // Update request status to failed
       _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.failed);
       notifyListeners();
-      throw ArgumentError('Insufficient balance to fulfill payment request');
+      throw ArgumentError('Insufficient confirmed balance to fulfill payment request');
     }
 
     // Update request status to accepted
     _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.accepted);
 
     // Create and process transaction
+    final transactionId = _generateTransactionId();
     final transaction = Transaction(
-      id: _generateTransactionId(),
+      id: transactionId,
       fromDevice: currentDeviceId,
       toDevice: request.fromDevice,
       amount: request.amount,
       timestamp: DateTime.now(),
-      signature: _generateSignature(_generateTransactionId(), currentDeviceId, request.fromDevice, request.amount),
+      signature: _generateSignature(transactionId, currentDeviceId, request.fromDevice, request.amount),
     );
 
     _processTransaction(transaction);
@@ -169,6 +198,8 @@ class PaymentService extends ChangeNotifier {
     // Update request status to completed
     _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.completed);
     notifyListeners();
+    
+    return transaction;
   }
 
   void rejectPaymentRequest(String requestId) {
@@ -207,8 +238,8 @@ class PaymentService extends ChangeNotifier {
       throw ArgumentError('Amount must be greater than 0');
     }
 
-    if (amount > _balance) {
-      throw ArgumentError('Insufficient balance');
+    if (amount > _confirmedBalance) {
+      throw ArgumentError('Insufficient confirmed balance');
     }
 
     final transaction = Transaction(
@@ -225,17 +256,96 @@ class PaymentService extends ChangeNotifier {
   }
 
   void receiveTransaction(Transaction transaction) {
-    // Add to transactions and update balance
+    // Add to transactions as pending (no balance update until confirmed)
     _transactions.add(transaction);
-    _balance += transaction.amount;
+    
+    // Find and complete any corresponding payment request
+    final requestIndex = _paymentRequests.indexWhere((r) => 
+      r.fromDevice == transaction.toDevice && 
+      r.amount == transaction.amount &&
+      r.status == PaymentRequestStatus.pending
+    );
+    
+    if (requestIndex != -1) {
+      final request = _paymentRequests[requestIndex];
+      _paymentRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.completed);
+    }
+    
     notifyListeners();
   }
 
   void _processTransaction(Transaction transaction) {
-    // Deduct from balance and add to transactions
+    // Add to transactions as pending (no balance update until confirmed)
     _transactions.add(transaction);
-    _balance -= transaction.amount;
+    // Note: Balance is not deducted until blockchain confirmation
     notifyListeners();
+  }
+
+  // Blockchain synchronization methods
+  
+  /// Get all transactions that need to be submitted to blockchain
+  List<Transaction> getPendingBlockchainTransactions() {
+    return _transactions
+        .where((t) => t.status == TransactionStatus.pendingOffline)
+        .toList();
+  }
+  
+  /// Mark transaction as submitted to blockchain
+  void markTransactionSubmitted(String transactionId, String blockchainTxId) {
+    final index = _transactions.indexWhere((t) => t.id == transactionId);
+    if (index != -1) {
+      _transactions[index] = _transactions[index].copyWith(
+        status: TransactionStatus.pendingBlockchain,
+        blockchainTxId: blockchainTxId,
+      );
+      notifyListeners();
+    }
+  }
+  
+  /// Confirm transaction on blockchain (updates balances)
+  void confirmTransaction(String transactionId, {DateTime? confirmedAt}) {
+    final index = _transactions.indexWhere((t) => t.id == transactionId);
+    if (index != -1) {
+      final transaction = _transactions[index];
+      _transactions[index] = transaction.copyWith(
+        status: TransactionStatus.confirmed,
+        confirmedAt: confirmedAt ?? DateTime.now(),
+      );
+      
+      // Update confirmed balance based on transaction direction
+      if (transaction.fromDevice == getCurrentDeviceId()) {
+        // Outgoing transaction - deduct from confirmed balance
+        _confirmedBalance -= transaction.amount;
+      } else {
+        // Incoming transaction - add to confirmed balance
+        _confirmedBalance += transaction.amount;
+      }
+      
+      notifyListeners();
+    }
+  }
+  
+  /// Mark transaction as failed
+  void failTransaction(String transactionId, String error) {
+    final index = _transactions.indexWhere((t) => t.id == transactionId);
+    if (index != -1) {
+      _transactions[index] = _transactions[index].copyWith(
+        status: TransactionStatus.failed,
+        blockchainError: error,
+      );
+      notifyListeners();
+    }
+  }
+  
+  /// Sync with blockchain - to be called when online
+  Future<void> syncWithBlockchain() async {
+    // This would be implemented to:
+    // 1. Submit pending transactions to Firebase Function
+    // 2. Check status of pending blockchain transactions
+    // 3. Update transaction statuses and balances accordingly
+    // 
+    // Example implementation would call your Firebase Function here
+    debugPrint('Syncing ${getPendingBlockchainTransactions().length} pending transactions with blockchain...');
   }
 
   void clearHistory() {
