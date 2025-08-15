@@ -1,4 +1,3 @@
-// lib/features/blockchain/data/repositories/blockchain_repository_impl.dart
 import 'package:solana/solana.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../domain/entities/transaction_entity.dart';
@@ -20,29 +19,61 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
   @override
   Future<void> sendTransaction(TransactionEntity tx) async {
     // Save locally first (offline)
-    await localDb.insert('transactions', TransactionModel.fromEntity(tx).toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    final txModel = TransactionModel.fromEntity(tx);
+    await localDb.insert(
+      'transactions',
+      txModel.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
-    // If online, push to Solana
-    // Example:
-    // final signature = await client.sendTransaction(...);
-    // await verifyTransaction(signature);
+    try {
+      // Try sending the transaction via Solana RPC
+      final signature = await client.sendAndConfirmTransaction(
+        txModel.message,
+      );
+
+      // Mark as pending with signature in local DB
+      await localDb.update(
+        'transactions',
+        {'status': 'pending', 'id': signature},
+        where: 'id = ?',
+        whereArgs: [txModel.id],
+      );
+
+      // Verify on Solscan and update status
+      await verifyTransaction(signature);
+    } catch (e) {
+      // Offline or failed: leave status as pending
+      print('Transaction could not be sent: $e');
+    }
   }
 
   @override
   Future<List<TransactionEntity>> getPendingTransactions() async {
-    final result = await localDb.query('transactions', where: 'status = ?', whereArgs: ['pending']);
-    return result.map((e) => TransactionModel.fromMap(e)).toList();
+    final result = await localDb.query(
+      'transactions',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+    );
+
+    return result.map((e) => TransactionModel.fromMap(e).toEntity()).toList();
   }
 
   @override
   Future<void> syncPendingTransactions() async {
     final pending = await getPendingTransactions();
+
     for (var tx in pending) {
-      // send to Solana if online
-      // await client.sendTransaction(...);
-      // then verify
-      // await verifyTransaction(signature);
+      try {
+        final txModel = TransactionModel.fromEntity(tx);
+        final signature = await client.sendAndConfirmTransaction(
+          txModel.message,
+        );
+
+        await verifyTransaction(signature);
+      } catch (e) {
+        print('Failed to sync transaction ${tx.id}: $e');
+      }
     }
   }
 
@@ -54,8 +85,9 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
   @override
   Future<void> verifyTransaction(String txSignature) async {
     final result = await solscan.getTransaction(txSignature);
-    // Update local DB with status
+
     final status = (result['status'] == 'Success') ? 'confirmed' : 'pending';
+
     await localDb.update(
       'transactions',
       {'status': status},
