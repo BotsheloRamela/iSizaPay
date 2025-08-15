@@ -1,0 +1,502 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../services/payment_service.dart';
+import '../../domain/models/transaction.dart';
+
+class TransactionHistoryScreen extends StatelessWidget {
+  const TransactionHistoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Transaction History'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          Consumer<PaymentService>(
+            builder: (context, paymentService, child) {
+              return PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'clear_history') {
+                    _showClearHistoryDialog(context, paymentService);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'clear_history',
+                    child: Row(
+                      children: [
+                        Icon(Icons.clear_all, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Clear History'),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+      body: Consumer<PaymentService>(
+        builder: (context, paymentService, child) {
+          return Column(
+            children: [
+              _buildSummaryCard(paymentService),
+              _buildTransactionsList(paymentService),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(PaymentService paymentService) {
+    final transactions = paymentService.transactions;
+    final totalSent = transactions
+        .map((t) => t.amount)
+        .fold<num>(0, (sum, amount) => sum + amount);
+    
+    final paymentRequests = paymentService.paymentRequests;
+    final completedRequests = paymentRequests
+        .where((r) => r.status == PaymentRequestStatus.completed)
+        .length;
+    
+    final pendingRequests = paymentRequests
+        .where((r) => r.status == PaymentRequestStatus.pending)
+        .length;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.analytics, color: Colors.blue.shade600),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Summary',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Current Balance',
+                      '\$${paymentService.balance.toStringAsFixed(2)}',
+                      Icons.account_balance_wallet,
+                      Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Total Sent',
+                      '\$${totalSent.toStringAsFixed(2)}',
+                      Icons.arrow_upward,
+                      Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Completed',
+                      '$completedRequests',
+                      Icons.check_circle,
+                      Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Pending',
+                      '$pendingRequests',
+                      Icons.schedule,
+                      Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        border: Border.all(color: color.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionsList(PaymentService paymentService) {
+    final transactions = paymentService.transactions;
+    final paymentRequests = paymentService.paymentRequests;
+
+    // Combine transactions and payment requests for chronological display
+    final List<dynamic> allItems = [
+      ...transactions,
+      ...paymentRequests,
+    ];
+
+    // Sort by timestamp (newest first)
+    allItems.sort((a, b) {
+      final aTime = a is Transaction ? a.timestamp : (a as PaymentRequest).timestamp;
+      final bTime = b is Transaction ? b.timestamp : (b as PaymentRequest).timestamp;
+      return bTime.compareTo(aTime);
+    });
+
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(Icons.history, color: Colors.blue.shade600),
+                const SizedBox(width: 8),
+                Text(
+                  'Recent Activity',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue.shade800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: allItems.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: allItems.length,
+                    itemBuilder: (context, index) {
+                      final item = allItems[index];
+                      if (item is Transaction) {
+                        return _buildTransactionCard(item);
+                      } else {
+                        return _buildPaymentRequestCard(item as PaymentRequest);
+                      }
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.history_toggle_off,
+            size: 80,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No Transactions Yet',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your transaction history will appear here',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionCard(Transaction transaction) {
+    final isOutgoing = true; // Assuming all stored transactions are outgoing for now
+    final timeSinceTransaction = DateTime.now().difference(transaction.timestamp);
+    final timeText = _formatTimeDifference(timeSinceTransaction);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: isOutgoing ? Colors.red.shade100 : Colors.green.shade100,
+          child: Icon(
+            isOutgoing ? Icons.arrow_upward : Icons.arrow_downward,
+            color: isOutgoing ? Colors.red : Colors.green,
+          ),
+        ),
+        title: Text(
+          isOutgoing ? 'Sent Payment' : 'Received Payment',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isOutgoing ? 'To: ${transaction.toDevice}' : 'From: ${transaction.fromDevice}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            Text(
+              timeText,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${isOutgoing ? "-" : "+"}\$${transaction.amount.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isOutgoing ? Colors.red : Colors.green,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.green.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Completed',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.green.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        onTap: () => _showTransactionDetails(transaction),
+      ),
+    );
+  }
+
+  Widget _buildPaymentRequestCard(PaymentRequest request) {
+    final timeSinceRequest = DateTime.now().difference(request.timestamp);
+    final timeText = _formatTimeDifference(timeSinceRequest);
+
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+
+    switch (request.status) {
+      case PaymentRequestStatus.pending:
+        statusColor = Colors.orange;
+        statusText = 'Pending';
+        statusIcon = Icons.schedule;
+        break;
+      case PaymentRequestStatus.accepted:
+        statusColor = Colors.blue;
+        statusText = 'Accepted';
+        statusIcon = Icons.handshake;
+        break;
+      case PaymentRequestStatus.completed:
+        statusColor = Colors.green;
+        statusText = 'Completed';
+        statusIcon = Icons.check_circle;
+        break;
+      case PaymentRequestStatus.rejected:
+        statusColor = Colors.red;
+        statusText = 'Rejected';
+        statusIcon = Icons.cancel;
+        break;
+      case PaymentRequestStatus.failed:
+        statusColor = Colors.red;
+        statusText = 'Failed';
+        statusIcon = Icons.error;
+        break;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: statusColor.withOpacity(0.2),
+          child: Icon(statusIcon, color: statusColor),
+        ),
+        title: const Text(
+          'Payment Request',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'To: ${request.toDevice}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            if (request.description.isNotEmpty)
+              Text(
+                request.description,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            Text(
+              timeText,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '\$${request.amount.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                statusText,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: statusColor,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        onTap: () => _showPaymentRequestDetails(request),
+      ),
+    );
+  }
+
+  String _formatTimeDifference(Duration difference) {
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  void _showTransactionDetails(Transaction transaction) {
+    // This would show a detailed transaction view
+    // For now, we'll keep it simple
+  }
+
+  void _showPaymentRequestDetails(PaymentRequest request) {
+    // This would show detailed payment request info
+    // For now, we'll keep it simple
+  }
+
+  void _showClearHistoryDialog(BuildContext context, PaymentService paymentService) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear History'),
+        content: const Text('Are you sure you want to clear all transaction history? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              paymentService.clearHistory();
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Transaction history cleared'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+}

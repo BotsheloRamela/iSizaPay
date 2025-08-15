@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:isiza_pay/presentation/screens/p2p_connection_screen.dart';
+import 'package:isiza_pay/presentation/widgets/error_dialog.dart';
+import 'package:isiza_pay/services/p2p_service.dart';
 import 'package:provider/provider.dart';
-import '../services/p2p_service.dart';
-import '../widgets/error_dialog.dart';
-import 'p2p_connection_screen.dart';
-
 class P2PDiscoveryScreen extends StatefulWidget {
   const P2PDiscoveryScreen({super.key});
 

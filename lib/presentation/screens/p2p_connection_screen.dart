@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/p2p_service.dart';
+import '../../services/p2p_service.dart';
+import '../screens/payment_send_screen.dart';
 
 class P2PConnectionScreen extends StatefulWidget {
   final String deviceId;
@@ -60,19 +61,39 @@ class _P2PConnectionScreenState extends State<P2PConnectionScreen> {
           Consumer<P2PService>(
             builder: (context, service, child) {
               final isConnected = service.connectedDevices.containsKey(widget.deviceId);
-              return IconButton(
-                icon: Icon(
-                  isConnected ? Icons.link_off : Icons.link,
-                  color: isConnected ? Colors.red : Colors.green,
-                ),
-                onPressed: () {
-                  if (isConnected) {
-                    _showDisconnectDialog();
-                  } else {
-                    _p2pService.connectToDevice(widget.deviceId);
-                  }
-                },
-                tooltip: isConnected ? 'Disconnect' : 'Connect',
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isConnected)
+                    IconButton(
+                      icon: const Icon(Icons.payments, color: Colors.blue),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => PaymentSendScreen(
+                              recipientDeviceId: widget.deviceId,
+                              recipientDeviceName: widget.deviceName,
+                            ),
+                          ),
+                        );
+                      },
+                      tooltip: 'Send Payment',
+                    ),
+                  IconButton(
+                    icon: Icon(
+                      isConnected ? Icons.link_off : Icons.link,
+                      color: isConnected ? Colors.red : Colors.green,
+                    ),
+                    onPressed: () {
+                      if (isConnected) {
+                        _showDisconnectDialog();
+                      } else {
+                        _p2pService.connectToDevice(widget.deviceId);
+                      }
+                    },
+                    tooltip: isConnected ? 'Disconnect' : 'Connect',
+                  ),
+                ],
               );
             },
           ),

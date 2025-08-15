@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:nearby_connections/nearby_connections.dart';
@@ -50,6 +51,9 @@ class P2PService extends ChangeNotifier {
   P2PConnectionStatus _status = P2PConnectionStatus.disconnected;
   String? _currentDeviceId;
   String? _errorMessage;
+  
+  // Message handler callback
+  Function(String endpointId, Map<String, dynamic> message)? onMessageReceived;
 
   Map<String, PeerDevice> get discoveredDevices => Map.unmodifiable(_discoveredDevices);
   Map<String, PeerDevice> get connectedDevices => Map.unmodifiable(_connectedDevices);
@@ -313,13 +317,28 @@ class P2PService extends ChangeNotifier {
 
   void _handlePayloadReceived(String endpointId, Payload payload) {
     if (payload.type == PayloadType.BYTES) {
-      debugPrint('Received message from $endpointId: ${String.fromCharCodes(payload.bytes!)}');
+      final messageString = String.fromCharCodes(payload.bytes!);
+      debugPrint('Received message from $endpointId: $messageString');
+      
+      // Try to parse as JSON for payment messages
+      try {
+        final Map<String, dynamic> message = jsonDecode(messageString);
+        if (onMessageReceived != null) {
+          onMessageReceived!(endpointId, message);
+        }
+      } catch (e) {
+        // If not JSON, treat as regular text message
+        debugPrint('Received plain text message: $messageString');
+        if (onMessageReceived != null) {
+          onMessageReceived!(endpointId, {'type': 'text', 'content': messageString});
+        }
+      }
     }
   }
 
   Future<void> sendMessage(String deviceId, String message) async {
     try {
-      await Nearby().sendBytesPayload(deviceId, message.codeUnits as Uint8List);
+      await Nearby().sendBytesPayload(deviceId, Uint8List.fromList(message.codeUnits));
     } catch (e) {
       _setError('Failed to send message: $e');
     }
