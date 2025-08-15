@@ -19,7 +19,11 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
   @override
   Future<void> sendTransaction(TransactionEntity tx) async {
     // Save locally first (offline)
-    final txModel = TransactionModel.fromEntity(tx);
+    final txModel = TransactionModel.fromEntity(
+      tx,
+      hash: tx.hash,
+      previousHash: tx.previousHash,
+    );
     await localDb.insert(
       'transactions',
       txModel.toMap(),
@@ -29,7 +33,7 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
     try {
       // Try sending the transaction via Solana RPC
       final signature = await client.sendAndConfirmTransaction(
-        txModel.message,
+        tx.message,
       );
 
       // Mark as pending with signature in local DB
@@ -61,13 +65,17 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
 
   @override
   Future<void> syncPendingTransactions() async {
-    final pending = await getPendingTransactions();
+    final txModel = TransactionModel.fromEntity(
+          tx,
+          hash: tx.hash ?? '',
+          previousHash: tx.previousHash ?? '',
+    );
 
     for (var tx in pending) {
       try {
         final txModel = TransactionModel.fromEntity(tx);
         final signature = await client.sendAndConfirmTransaction(
-          txModel.message,
+          txModel.toMessage,
         );
 
         await verifyTransaction(signature);
@@ -79,7 +87,7 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
 
   @override
   Future<double> getBalance(String walletAddress) async {
-    return await client.getBalance(walletAddress);
+    return await client.getBalance(Pubkey.fromBase58(walletAddress));
   }
 
   @override

@@ -29,7 +29,7 @@ class BlockchainVM extends StateNotifier<List<TransactionEntity>> {
   }
 
   Future<void> verifyTransaction(String txSignature) async {
-    final repo = read(blockchainRepositoryProvider);
+    (ref) => BlockchainVM(ref),
     await repo.verifyTransaction(txSignature);
     await loadPendingTransactions();
   }

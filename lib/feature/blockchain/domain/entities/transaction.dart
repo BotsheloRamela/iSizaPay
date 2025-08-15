@@ -5,7 +5,7 @@ class TransactionEntity {
   final String receiver;
   final double amount;
   final DateTime timestamp;
-  String status;
+  final String status;
 
   TransactionEntity({
     required this.id,

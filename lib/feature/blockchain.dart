@@ -1,6 +1,6 @@
 // lib/features/blockchain/blockchain_module.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'data/repositories/blockchain_repository_impl.dart';
+import 'data/repositories/blockchain.dart';
 import 'data/solscan/solscan_service.dart';
 import 'domain/repositories/blockchain_repository.dart';
 import 'package:solana/solana.dart';
