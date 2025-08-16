@@ -4,75 +4,83 @@ import 'package:isiza_pay/domain/enums/transaction_status.dart';
 
 class TransactionModel extends TransactionEntity {
   final String hash;
-  final String previousHash;
+  final String blockHash;
 
   TransactionModel({
-    required String id,
+    required super.id,
     required String senderAddress,
     required String receiverAddress,
-    required num amount,
-    required DateTime timestamp,
-    required TransactionStatus status,
-    required String signature,
-    required bool trustFloatUsed,
+    required super.amount,
+    required super.timestamp,
+    required super.signature,
+    required super.previousBlockHash,
+    TransactionStatus? status,
+    super.blockchainTxId,
+    super.blockchainError,
+    super.confirmedAt,
     required this.hash,
-    required this.previousHash,
+    required this.blockHash,
   }) : super(
-          id: id,
-          sender: senderAddress,
-          receiver: receiverAddress,
-          amount: amount,
-          timestamp: timestamp,
-          status: TransactionStatus.pendingOffline,
-          signature: signature,
-          trustFloatUsed: trustFloatUsed,
+          senderPublicKey: senderAddress,
+          receiverPublicKey: receiverAddress,
+          status: status ?? TransactionStatus.pendingOffline,
         );
 
-  factory TransactionModel.fromEntity(TransactionEntity entity, {required String hash, required String previousHash}) {
+  factory TransactionModel.fromEntity(TransactionEntity entity, {required String hash, required String blockHash}) {
     return TransactionModel(
       id: entity.id,
-      senderAddress: entity.sender,
-      receiverAddress: entity.receiver,
+      senderAddress: entity.senderPublicKey,
+      receiverAddress: entity.receiverPublicKey,
       amount: entity.amount,
       timestamp: entity.timestamp,
-      status: entity.status,
       signature: entity.signature,
-      trustFloatUsed: entity.trustFloatUsed,
+      previousBlockHash: entity.previousBlockHash,
+      status: entity.status,
+      blockchainTxId: entity.blockchainTxId,
+      blockchainError: entity.blockchainError,
+      confirmedAt: entity.confirmedAt,
       hash: hash,
-      previousHash: previousHash,
+      blockHash: blockHash,
     );
   }
 
   @override
   String toString() {
-    return 'TransactionModel(id: $id, sender: $sender, receiver: $receiver, amount: $amount, timestamp: $timestamp, status: $status, signature: $signature, trustFloatUsed: $trustFloatUsed, hash: $hash, previousHash: $previousHash)';
+    return 'TransactionModel(id: $id, senderPublicKey: $senderPublicKey, receiverPublicKey: $receiverPublicKey, amount: $amount, timestamp: $timestamp, status: $status, signature: $signature, hash: $hash, blockHash: $blockHash)';
   }
 
+  @override
   Map<String, dynamic> toJson() => {
         'id': id,
-        'sender': sender,
-        'receiver': receiver,
+        'senderPublicKey': senderPublicKey,
+        'receiverPublicKey': receiverPublicKey,
         'amount': amount,
         'timestamp': timestamp.toIso8601String(),
-        'status': status.name,
         'signature': signature,
-        'trustFloatUsed': trustFloatUsed,
+        'previousBlockHash': previousBlockHash,
+        'status': status.name,
+        'blockchainTxId': blockchainTxId,
+        'blockchainError': blockchainError,
+        'confirmedAt': confirmedAt?.toIso8601String(),
         'hash': hash,
-        'previousHash': previousHash,
+        'blockHash': blockHash,
       };
 
   static TransactionModel fromJson(Map<String, dynamic> json) {
     return TransactionModel(
       id: json['id'],
-      senderAddress: json['sender'],
-      receiverAddress: json['receiver'],
+      senderAddress: json['senderPublicKey'],
+      receiverAddress: json['receiverPublicKey'],
       amount: json['amount'],
       timestamp: DateTime.parse(json['timestamp']),
-      status: TransactionStatus.values.firstWhere((e) => e.name == json['status'], orElse: () => TransactionStatus.pendingOffline),
       signature: json['signature'],
-      trustFloatUsed: json['trustFloatUsed'] ?? false,
+      previousBlockHash: json['previousBlockHash'],
+      status: TransactionStatus.values.firstWhere((e) => e.name == json['status'], orElse: () => TransactionStatus.pendingOffline),
+      blockchainTxId: json['blockchainTxId'],
+      blockchainError: json['blockchainError'],
+      confirmedAt: json['confirmedAt'] != null ? DateTime.parse(json['confirmedAt']) : null,
       hash: json['hash'],
-      previousHash: json['previousHash'],
+      blockHash: json['blockHash'],
     );
   }
 }

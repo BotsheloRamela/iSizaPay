@@ -1,27 +1,26 @@
-// lib/features/blockchain/domain/entities/transaction_entity.dart
 import 'package:isiza_pay/domain/enums/transaction_status.dart';
 
 class TransactionEntity {
   final String id;
-  final String sender;
-  final String receiver;
+  final String senderPublicKey;
+  final String receiverPublicKey;
   final num amount;
   final DateTime timestamp;
   final String signature;
-  final bool trustFloatUsed;
+  final String previousBlockHash;
   final TransactionStatus status;
-  final String? blockchainTxId;    // Solana transaction ID when submitted
-  final String? blockchainError;   // Error message if failed
-  final DateTime? confirmedAt;     // When confirmed on blockchain
+  final String? blockchainTxId;
+  final String? blockchainError;
+  final DateTime? confirmedAt;
 
   TransactionEntity({
     required this.id,
-    required this.sender,
-    required this.receiver,
+    required this.senderPublicKey,
+    required this.receiverPublicKey,
     required this.amount,
     required this.timestamp,
     required this.signature,
-    this.trustFloatUsed = false,
+    required this.previousBlockHash,
     this.status = TransactionStatus.pendingOffline,
     this.blockchainTxId,
     this.blockchainError,
@@ -30,12 +29,12 @@ class TransactionEntity {
 
   TransactionEntity copyWith({
     String? id,
-    String? sender,
-    String? receiver,
+    String? senderPublicKey,
+    String? receiverPublicKey,
     num? amount,
     DateTime? timestamp,
     String? signature,
-    bool? trustFloatUsed,
+    String? previousBlockHash,
     TransactionStatus? status,
     String? blockchainTxId,
     String? blockchainError,
@@ -43,12 +42,12 @@ class TransactionEntity {
   }) {
     return TransactionEntity(
       id: id ?? this.id,
-      sender: sender ?? this.sender,
-      receiver: receiver ?? this.receiver,
+      senderPublicKey: senderPublicKey ?? this.senderPublicKey,
+      receiverPublicKey: receiverPublicKey ?? this.receiverPublicKey,
       amount: amount ?? this.amount,
       timestamp: timestamp ?? this.timestamp,
       signature: signature ?? this.signature,
-      trustFloatUsed: trustFloatUsed ?? this.trustFloatUsed,
+      previousBlockHash: previousBlockHash ?? this.previousBlockHash,
       status: status ?? this.status,
       blockchainTxId: blockchainTxId ?? this.blockchainTxId,
       blockchainError: blockchainError ?? this.blockchainError,
@@ -58,18 +57,18 @@ class TransactionEntity {
 
   @override
   String toString() {
-    return 'TransactionEntity(id: $id, sender: $sender, receiver: $receiver, amount: $amount, timestamp: $timestamp, signature: $signature, trustFloatUsed: $trustFloatUsed, status: $status, blockchainTxId: $blockchainTxId, blockchainError: $blockchainError, confirmedAt: $confirmedAt)';
+    return 'TransactionEntity(id: $id, senderPublicKey: $senderPublicKey, receiverPublicKey: $receiverPublicKey, amount: $amount, timestamp: $timestamp, signature: $signature, previousBlockHash: $previousBlockHash, status: $status, blockchainTxId: $blockchainTxId, blockchainError: $blockchainError, confirmedAt: $confirmedAt)';
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'sender': sender,
-      'receiver': receiver,
+      'senderPublicKey': senderPublicKey,
+      'receiverPublicKey': receiverPublicKey,
       'amount': amount,
       'timestamp': timestamp.toIso8601String(),
       'signature': signature,
-      'trustFloatUsed': trustFloatUsed,
+      'previousBlockHash': previousBlockHash,
       'status': status.name,
       'blockchainTxId': blockchainTxId,
       'blockchainError': blockchainError,
@@ -80,12 +79,12 @@ class TransactionEntity {
   factory TransactionEntity.fromJson(Map<String, dynamic> json) {
     return TransactionEntity(
       id: json['id'] as String,
-      sender: json['sender'] as String,
-      receiver: json['receiver'] as String,
+      senderPublicKey: json['senderPublicKey'] as String,
+      receiverPublicKey: json['receiverPublicKey'] as String,
       amount: json['amount'] as num,
       timestamp: DateTime.parse(json['timestamp'] as String),
       signature: json['signature'] as String,
-      trustFloatUsed: json['trustFloatUsed'] as bool? ?? false,
+      previousBlockHash: json['previousBlockHash'] as String,
       status: TransactionStatus.values.firstWhere(
         (e) => e.name == (json['status'] as String),
         orElse: () => TransactionStatus.pendingOffline,

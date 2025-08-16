@@ -23,7 +23,7 @@ class PaymentService extends ChangeNotifier {
   // Available balance - includes pending incoming transactions (trust float)
   num get availableBalance {
     final pendingIncoming = _transactions
-        .where((t) => t.status == TransactionStatus.pendingOffline && t.receiver == getCurrentDeviceId())
+        .where((t) => t.status == TransactionStatus.pendingOffline && t.receiverPublicKey == getCurrentDeviceId())
         .map((t) => t.amount)
         .fold<num>(0, (sum, amount) => sum + amount);
     
@@ -119,11 +119,12 @@ class PaymentService extends ChangeNotifier {
     final transactionId = _generateTransactionId();
     final transaction = TransactionEntity(
       id: transactionId,
-      sender: currentDeviceId,
-      receiver: request.fromDevice,
+      senderPublicKey: currentDeviceId,
+      receiverPublicKey: request.fromDevice,
       amount: request.amount,
       timestamp: DateTime.now(),
       signature: _generateSignature(transactionId, currentDeviceId, request.fromDevice, request.amount),
+      previousBlockHash: '0',
     );
 
     _processTransaction(transaction);
@@ -177,11 +178,12 @@ class PaymentService extends ChangeNotifier {
 
     final transaction = TransactionEntity(
       id: _generateTransactionId(),
-      sender: fromDevice,
-      receiver: toDevice,
+      senderPublicKey: fromDevice,
+      receiverPublicKey: toDevice,
       amount: amount,
       timestamp: DateTime.now(),
       signature: _generateSignature(_generateTransactionId(), fromDevice, toDevice, amount),
+      previousBlockHash: '0',
     );
 
     _processTransaction(transaction);
@@ -194,7 +196,7 @@ class PaymentService extends ChangeNotifier {
 
     // Find and complete any corresponding payment request
     final requestIndex = _paymentRequests.indexWhere((r) =>
-      r.fromDevice == transaction.receiver &&
+      r.fromDevice == transaction.receiverPublicKey &&
       r.amount == transaction.amount &&
       r.status == PaymentRequestStatus.pending
     );
@@ -246,7 +248,7 @@ class PaymentService extends ChangeNotifier {
       );
 
       // Update confirmed balance based on transaction direction
-      if (transaction.sender == getCurrentDeviceId()) {
+      if (transaction.senderPublicKey == getCurrentDeviceId()) {
         // Outgoing transaction - deduct from confirmed balance
         _confirmedBalance -= transaction.amount;
       } else {

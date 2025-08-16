@@ -326,7 +326,7 @@ class TransactionHistoryScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              isOutgoing ? 'To: ${transaction.receiver}' : 'From: ${transaction.sender}',
+              isOutgoing ? 'To: ${transaction.receiverPublicKey}' : 'From: ${transaction.senderPublicKey}',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey.shade600,
