@@ -51,9 +51,11 @@ dependencies:
   
   # Firebase dependencies for Solana sync
   firebase_core: ^3.6.0
-  firebase_firestore: ^5.5.0
-  firebase_functions: ^5.3.0
   cloud_firestore: ^5.5.0
+  cloud_functions: ^5.3.0
+  
+  # Additional dependencies
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:

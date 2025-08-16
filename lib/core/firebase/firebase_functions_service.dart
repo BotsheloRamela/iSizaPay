@@ -1,4 +1,4 @@
-import 'package:firebase_functions/firebase_functions.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isiza_pay/domain/entities/event_transaction.dart';
 import 'package:isiza_pay/domain/entities/vendor_info.dart';
