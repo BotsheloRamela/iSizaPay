@@ -10,8 +10,21 @@ import 'presentation/screens/payment_send_screen.dart';
 import 'presentation/screens/payment_receive_screen.dart';
 import 'presentation/screens/transaction_history_screen.dart';
 import 'package:isiza_pay/core/di/providers.dart';
+import 'package:isiza_pay/core/firebase/firebase_config.dart';
+import 'package:isiza_pay/core/firebase/firebase_options.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  // Initialize Firebase configuration
+  await FirebaseConfig.initialize();
+  
   runApp(const ProviderScope(child: MyApp()));
 }
 
