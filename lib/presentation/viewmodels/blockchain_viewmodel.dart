@@ -55,6 +55,9 @@ class BlockchainNotifier extends StateNotifier<BlockchainState> {
   final GetTransactionHistoryUseCase _getTransactionHistoryUseCase;
   final GetBalanceUseCase _getBalanceUseCase;
   final CreateBlockUseCase _createBlockUseCase;
+  
+  // Callback for when a transaction is created
+  Function(TransactionEntity)? onTransactionCreated;
 
   BlockchainNotifier(
     this._createTransactionUseCase,
@@ -136,6 +139,11 @@ class BlockchainNotifier extends StateNotifier<BlockchainState> {
         amount: amount,
         senderKeyPair: state.keyPair!,
       );
+
+      // Notify PaymentService about the new transaction
+      if (onTransactionCreated != null) {
+        onTransactionCreated!(transaction);
+      }
 
       await _loadTransactionHistory();
       await _loadBalance();

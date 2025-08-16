@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:isiza_pay/domain/entities/payment_request.dart';
@@ -12,6 +13,15 @@ class PaymentService extends ChangeNotifier {
   final List<PaymentRequest> _incomingRequests = [];
   
   num _confirmedBalance = 1000.0; // Starting balance for demo - only confirmed transactions
+  
+  // P2P Service for sending messages between devices
+  dynamic _p2pService;
+  
+  // Blockchain ViewModel for submitting transactions to blockchain
+  dynamic _blockchainViewModel;
+  
+  // Callback for blockchain transaction creation
+  Function(TransactionEntity)? onBlockchainTransactionCreated;
   
   List<TransactionEntity> get transactions => List.unmodifiable(_transactions);
   List<PaymentRequest> get paymentRequests => List.unmodifiable(_paymentRequests);
@@ -40,10 +50,19 @@ class PaymentService extends ChangeNotifier {
   List<TransactionEntity> get pendingTransactions =>
     _transactions.where((t) => t.status != TransactionStatus.confirmed).toList();
 
+  // Initialize P2P service reference
+  void setP2PService(dynamic p2pService) {
+    _p2pService = p2pService;
+  }
+
+  // Initialize blockchain viewmodel reference
+  void setBlockchainViewModel(dynamic blockchainViewModel) {
+    _blockchainViewModel = blockchainViewModel;
+  }
+
   String? getCurrentDeviceId() {
-    // This would be implemented to get current device ID
-    // For now returning null, should be injected from P2PService
-    return null;
+    // Get current device ID from P2P service
+    return _p2pService?.currentDeviceId;
   }
 
   String _generateTransactionId() {
@@ -62,12 +81,12 @@ class PaymentService extends ChangeNotifier {
     return data.hashCode.toString();
   }
 
-  PaymentRequest createPaymentRequest({
+  Future<PaymentRequest> createPaymentRequest({
     required String fromDevice,
     required String toDevice,
     required num amount,
     required String description,
-  }) {
+  }) async {
     if (amount <= 0) {
       throw ArgumentError('Amount must be greater than 0');
     }
@@ -87,6 +106,10 @@ class PaymentService extends ChangeNotifier {
 
     _paymentRequests.add(request);
     notifyListeners();
+
+    // Send payment request to target device via P2P
+    await _sendPaymentRequestToDevice(request, toDevice);
+
     return request;
   }
 
@@ -98,7 +121,7 @@ class PaymentService extends ChangeNotifier {
     }
   }
 
-  TransactionEntity acceptPaymentRequest(String requestId, String currentDeviceId) {
+  Future<TransactionEntity> acceptPaymentRequest(String requestId, String currentDeviceId) async {
     final requestIndex = _incomingRequests.indexWhere((r) => r.id == requestId);
     if (requestIndex == -1) throw ArgumentError('Payment request not found');
 
@@ -115,33 +138,93 @@ class PaymentService extends ChangeNotifier {
     // Update request status to accepted
     _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.accepted);
 
-    // Create and process transaction
-    final transactionId = _generateTransactionId();
-    final transaction = TransactionEntity(
-      id: transactionId,
-      senderPublicKey: currentDeviceId,
-      receiverPublicKey: request.fromDevice,
-      amount: request.amount,
-      timestamp: DateTime.now(),
-      signature: _generateSignature(transactionId, currentDeviceId, request.fromDevice, request.amount),
-      previousBlockHash: '0',
-    );
+    // Create blockchain transaction via the blockchain viewmodel
+    try {
+      TransactionEntity? createdTransaction;
+      
+      if (_blockchainViewModel != null) {
+        // Store callback to capture the created transaction
+        Function(TransactionEntity)? originalCallback = _blockchainViewModel.onTransactionCreated;
+        
+        // Temporarily override the callback to capture the transaction
+        _blockchainViewModel.onTransactionCreated = (transaction) {
+          createdTransaction = transaction;
+          // Call the original callback if it exists
+          if (originalCallback != null) {
+            originalCallback(transaction);
+          }
+        };
+        
+        // Use blockchain system to create the transaction
+        await _blockchainViewModel.createTransaction(
+          receiverPublicKey: request.fromDevice,
+          amount: request.amount,
+        );
+        
+        // Restore the original callback
+        _blockchainViewModel.onTransactionCreated = originalCallback;
+        
+        debugPrint('PaymentService: Blockchain transaction created for payment request $requestId');
+        
+        // Send the blockchain transaction to the original requester
+        if (createdTransaction != null) {
+          await _sendTransactionToDevice(createdTransaction!, request.fromDevice);
+        }
+      } else {
+        // Fallback to local transaction processing if blockchain is not available
+        final transactionId = _generateTransactionId();
+        final transaction = TransactionEntity(
+          id: transactionId,
+          senderPublicKey: currentDeviceId,
+          receiverPublicKey: request.fromDevice,
+          amount: request.amount,
+          timestamp: DateTime.now(),
+          signature: _generateSignature(transactionId, currentDeviceId, request.fromDevice, request.amount),
+          previousBlockHash: '0',
+        );
 
-    _processTransaction(transaction);
+        _processTransaction(transaction);
+        
+        // Send the actual transaction to the original requester
+        await _sendTransactionToDevice(transaction, request.fromDevice);
+      }
+
+      // Send payment response to original requester
+      await _sendPaymentResponseToDevice(requestId, true, request.fromDevice);
+    } catch (blockchainError) {
+      debugPrint('PaymentService: Blockchain transaction failed: $blockchainError');
+      // Mark request as failed
+      _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.failed);
+      notifyListeners();
+      throw Exception('Failed to process blockchain transaction: $blockchainError');
+    }
 
     // Update request status to completed
     _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.completed);
     notifyListeners();
 
-    return transaction;
+    // Return a dummy transaction object since the real one is handled by blockchain
+    return TransactionEntity(
+      id: 'blockchain_tx',
+      senderPublicKey: currentDeviceId,
+      receiverPublicKey: request.fromDevice,
+      amount: request.amount,
+      timestamp: DateTime.now(),
+      signature: 'blockchain_signature',
+      previousBlockHash: '0',
+    );
   }
 
-  void rejectPaymentRequest(String requestId) {
+  Future<void> rejectPaymentRequest(String requestId) async {
     final requestIndex = _incomingRequests.indexWhere((r) => r.id == requestId);
     if (requestIndex == -1) return;
 
     final request = _incomingRequests[requestIndex];
     _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.rejected);
+    
+    // Send rejection response to original requester
+    await _sendPaymentResponseToDevice(requestId, false, request.fromDevice);
+    
     notifyListeners();
   }
 
@@ -193,10 +276,14 @@ class PaymentService extends ChangeNotifier {
   void receiveTransaction(TransactionEntity transaction) {
     // Add to transactions as pending (no balance update until confirmed)
     _transactions.add(transaction);
+    debugPrint('PaymentService: Received transaction ${transaction.id} - Amount: ${transaction.amount}');
 
     // Find and complete any corresponding payment request
+    // Look for pending requests where we are the requester (fromDevice) and the transaction
+    // is coming from the device we requested payment from (toDevice)
     final requestIndex = _paymentRequests.indexWhere((r) =>
-      r.fromDevice == transaction.receiverPublicKey &&
+      r.fromDevice == transaction.receiverPublicKey && // We are the receiver of the payment
+      r.toDevice == transaction.senderPublicKey && // The sender is who we requested from  
       r.amount == transaction.amount &&
       r.status == PaymentRequestStatus.pending
     );
@@ -204,9 +291,23 @@ class PaymentService extends ChangeNotifier {
     if (requestIndex != -1) {
       final request = _paymentRequests[requestIndex];
       _paymentRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.completed);
+      debugPrint('PaymentService: Completed payment request ${request.id} with received transaction ${transaction.id}');
+    } else {
+      debugPrint('PaymentService: No matching payment request found for transaction ${transaction.id}');
     }
 
     notifyListeners();
+  }
+
+  // Method to add blockchain transactions to PaymentService transaction list
+  void addBlockchainTransaction(TransactionEntity transaction) {
+    // Check if transaction already exists to avoid duplicates
+    final exists = _transactions.any((t) => t.id == transaction.id);
+    if (!exists) {
+      _transactions.add(transaction);
+      debugPrint('PaymentService: Added blockchain transaction ${transaction.id} to transaction history');
+      notifyListeners();
+    }
   }
 
   void _processTransaction(TransactionEntity transaction) {
@@ -290,6 +391,61 @@ class PaymentService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // P2P Message sending methods
+  Future<void> _sendPaymentRequestToDevice(PaymentRequest request, String toDeviceId) async {
+    if (_p2pService == null) {
+      debugPrint('PaymentService: P2P service not available, cannot send payment request');
+      return;
+    }
+
+    try {
+      final message = getPaymentRequestMessage(request);
+      final messageString = jsonEncode(message);
+      await _p2pService.sendMessage(toDeviceId, messageString);
+      debugPrint('PaymentService: Sent payment request ${request.id} to device $toDeviceId');
+    } catch (e) {
+      debugPrint('PaymentService: Failed to send payment request: $e');
+      // Mark request as failed since we couldn't send it
+      final requestIndex = _paymentRequests.indexWhere((r) => r.id == request.id);
+      if (requestIndex != -1) {
+        _paymentRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.failed);
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _sendPaymentResponseToDevice(String requestId, bool accepted, String toDeviceId) async {
+    if (_p2pService == null) {
+      debugPrint('PaymentService: P2P service not available, cannot send payment response');
+      return;
+    }
+
+    try {
+      final message = getPaymentResponseMessage(requestId, accepted);
+      final messageString = jsonEncode(message);
+      await _p2pService.sendMessage(toDeviceId, messageString);
+      debugPrint('PaymentService: Sent payment response for $requestId (accepted: $accepted) to device $toDeviceId');
+    } catch (e) {
+      debugPrint('PaymentService: Failed to send payment response: $e');
+    }
+  }
+
+  Future<void> _sendTransactionToDevice(TransactionEntity transaction, String toDeviceId) async {
+    if (_p2pService == null) {
+      debugPrint('PaymentService: P2P service not available, cannot send transaction');
+      return;
+    }
+
+    try {
+      final message = getTransactionMessage(transaction);
+      final messageString = jsonEncode(message);
+      await _p2pService.sendMessage(toDeviceId, messageString);
+      debugPrint('PaymentService: Sent transaction ${transaction.id} to device $toDeviceId');
+    } catch (e) {
+      debugPrint('PaymentService: Failed to send transaction: $e');
+    }
+  }
+
   Map<String, dynamic> getPaymentRequestMessage(PaymentRequest request) {
     return {
       'type': 'payment_request',
@@ -329,6 +485,7 @@ class PaymentService extends ChangeNotifier {
       case 'payment_response':
         final requestId = data['requestId'] as String;
         final accepted = data['accepted'] as bool;
+        debugPrint('PaymentService: Received payment response for $requestId (accepted: $accepted)');
         if (accepted) {
           completePaymentRequest(requestId);
         } else {

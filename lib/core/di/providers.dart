@@ -38,6 +38,27 @@ final createBlockUseCaseProvider = Provider(
   (ref) => CreateBlockUseCase(ref.read(blockchainRepositoryProvider)),
 );
 
+// P2P Service Provider
+final p2pServiceProvider = ChangeNotifierProvider<P2PService>((ref) {
+  return P2PService();
+});
+
+// Payment Service Provider  
+final paymentServiceProvider = ChangeNotifierProvider<PaymentService>((ref) {
+  final paymentService = PaymentService();
+  
+  // Initialize P2P service reference for sending messages
+  final p2pService = ref.read(p2pServiceProvider.notifier);
+  paymentService.setP2PService(p2pService);
+  
+  // Set up message handling for payment messages
+  p2pService.onMessageReceived = (String endpointId, Map<String, dynamic> message) {
+    paymentService.handleIncomingMessage(message);
+  };
+  
+  return paymentService;
+});
+
 final blockchainViewModelProvider = StateNotifierProvider<BlockchainNotifier, BlockchainState>(
   (ref) => BlockchainNotifier(
     ref.read(createTransactionUseCaseProvider),
@@ -47,13 +68,3 @@ final blockchainViewModelProvider = StateNotifierProvider<BlockchainNotifier, Bl
     ref.read(createBlockUseCaseProvider),
   ),
 );
-
-// P2P Service Provider
-final p2pServiceProvider = ChangeNotifierProvider<P2PService>((ref) {
-  return P2PService();
-});
-
-// Payment Service Provider  
-final paymentServiceProvider = ChangeNotifierProvider<PaymentService>((ref) {
-  return PaymentService();
-});

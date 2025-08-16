@@ -19,13 +19,22 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the services to set up message handling
+    // Watch the services to set up cross-references
     final p2pService = ref.watch(p2pServiceProvider);
     final paymentService = ref.watch(paymentServiceProvider);
+    final blockchainViewModel = ref.watch(blockchainViewModelProvider.notifier);
     
     // Set up message handling between P2P and Payment services
     p2pService.onMessageReceived = (endpointId, message) {
       paymentService.handleIncomingMessage(message);
+    };
+    
+    // Set up blockchain viewmodel reference in payment service
+    paymentService.setBlockchainViewModel(blockchainViewModel);
+    
+    // Set up callback to notify PaymentService when blockchain transactions are created
+    blockchainViewModel.onTransactionCreated = (transaction) {
+      paymentService.addBlockchainTransaction(transaction);
     };
     
     return MaterialApp(

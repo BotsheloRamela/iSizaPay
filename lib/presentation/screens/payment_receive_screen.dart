@@ -175,7 +175,7 @@ class PaymentReceiveScreen extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () => _rejectRequest(request.id, paymentService),
+                              onPressed: () => _rejectRequest(request.id, paymentService, context),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
                                 foregroundColor: Colors.white,
@@ -186,7 +186,7 @@ class PaymentReceiveScreen extends ConsumerWidget {
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () => _acceptRequest(request.id, paymentService),
+                              onPressed: () => _acceptRequest(request.id, paymentService, context),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green,
                                 foregroundColor: Colors.white,
@@ -211,12 +211,54 @@ class PaymentReceiveScreen extends ConsumerWidget {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
-  void _acceptRequest(String requestId, dynamic paymentService) {
-    // This would be implemented to accept the payment request
-    paymentService.rejectPaymentRequest(requestId); // Placeholder
+  void _acceptRequest(String requestId, dynamic paymentService, BuildContext context) async {
+    try {
+      final currentDeviceId = paymentService.getCurrentDeviceId();
+      if (currentDeviceId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Device not connected. Please check P2P connection.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      await paymentService.acceptPaymentRequest(requestId, currentDeviceId);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment request accepted successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to accept payment request: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  void _rejectRequest(String requestId, dynamic paymentService) {
-    paymentService.rejectPaymentRequest(requestId);
+  void _rejectRequest(String requestId, dynamic paymentService, BuildContext context) async {
+    try {
+      await paymentService.rejectPaymentRequest(requestId);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment request rejected'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to reject payment request: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isiza_pay/core/di/providers.dart';
-import 'dart:convert';
 
 class PaymentSendScreen extends ConsumerStatefulWidget {
   final String? recipientDeviceId;
@@ -24,14 +22,12 @@ class _PaymentSendScreenState extends ConsumerState<PaymentSendScreen> {
   final _descriptionController = TextEditingController();
   
   String? _selectedRecipientId;
-  String? _selectedRecipientName;
   bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
     _selectedRecipientId = widget.recipientDeviceId;
-    _selectedRecipientName = widget.recipientDeviceName;
   }
 
   @override
@@ -44,7 +40,6 @@ class _PaymentSendScreenState extends ConsumerState<PaymentSendScreen> {
   @override
   Widget build(BuildContext context) {
     final p2pService = ref.watch(p2pServiceProvider);
-    final paymentService = ref.watch(paymentServiceProvider);
     final blockchainState = ref.watch(blockchainViewModelProvider);
 
     return Scaffold(
@@ -140,23 +135,59 @@ class _PaymentSendScreenState extends ConsumerState<PaymentSendScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: blockchainState.isLoading ? null : _sendPayment,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: blockchainState.isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Send Payment',
-                          style: TextStyle(fontSize: 18),
-                        ),
+              const SizedBox(height: 20),
+              Text(
+                'Description (Optional)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter payment description',
                 ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 30),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: blockchainState.isLoading || _isProcessing ? null : _sendPaymentRequest,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: _isProcessing
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Text('Request Payment'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: blockchainState.isLoading || _isProcessing ? null : _sendPayment,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: blockchainState.isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Text('Send Direct'),
+                    ),
+                  ),
+                ],
               ),
               if (blockchainState.error != null) ...[
                 const SizedBox(height: 16),
@@ -181,6 +212,60 @@ class _PaymentSendScreenState extends ConsumerState<PaymentSendScreen> {
     );
   }
 
+  void _sendPaymentRequest() async {
+    if (!_formKey.currentState!.validate() || _selectedRecipientId == null) {
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    final amount = double.parse(_amountController.text);
+    final description = _descriptionController.text.trim();
+    final paymentService = ref.read(paymentServiceProvider);
+    final p2pService = ref.read(p2pServiceProvider);
+    
+    try {
+      final fromDeviceId = p2pService.currentDeviceId;
+      if (fromDeviceId == null) {
+        throw Exception('Device not connected. Please check P2P connection.');
+      }
+
+      await paymentService.createPaymentRequest(
+        fromDevice: fromDeviceId,
+        toDevice: _selectedRecipientId!,
+        amount: amount,
+        description: description.isEmpty ? 'Payment request' : description,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment request of \$${amount.toStringAsFixed(2)} sent successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send payment request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
   void _sendPayment() async {
     if (!_formKey.currentState!.validate() || _selectedRecipientId == null) {
       return;
@@ -198,7 +283,7 @@ class _PaymentSendScreenState extends ConsumerState<PaymentSendScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payment of \$${amount.toStringAsFixed(2)} sent successfully!'),
+            content: Text('Direct payment of \$${amount.toStringAsFixed(2)} sent successfully!'),
             backgroundColor: Colors.green,
           ),
         );
