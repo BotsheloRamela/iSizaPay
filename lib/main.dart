@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isiza_pay/domain/enums/payment_request_status.dart';
 import 'package:isiza_pay/presentation/screens/p2p_discovery_screen.dart';
-import 'package:provider/provider.dart' as provider;
-import 'services/p2p_service.dart';
-import 'services/payment_service.dart';
+import 'package:isiza_pay/services/p2p_service.dart';
+import 'package:isiza_pay/services/payment_service.dart';
 import 'presentation/widgets/error_dialog.dart';
 import 'presentation/screens/payment_send_screen.dart';
 import 'presentation/screens/payment_receive_screen.dart';
@@ -15,62 +14,42 @@ void main() {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return provider.MultiProvider(
-      providers: [
-        provider.ChangeNotifierProvider(create: (context) => P2PService()),
-        provider.ChangeNotifierProvider(create: (context) => PaymentService()),
-      ],
-      child: provider.Consumer2<P2PService, PaymentService>(
-        builder: (context, p2pService, paymentService, child) {
-          // Set up message handling between P2P and Payment services
-          p2pService.onMessageReceived = (endpointId, message) {
-            paymentService.handleIncomingMessage(message);
-          };
-          
-          return MaterialApp(
-            title: 'Isiza Pay - P2P',
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-              useMaterial3: true,
-            ),
-            home: const MyHomePage(title: 'Isiza Pay'),
-          );
-        },
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the services to set up message handling
+    final p2pService = ref.watch(p2pServiceProvider);
+    final paymentService = ref.watch(paymentServiceProvider);
+    
+    // Set up message handling between P2P and Payment services
+    p2pService.onMessageReceived = (endpointId, message) {
+      paymentService.handleIncomingMessage(message);
+    };
+    
+    return MaterialApp(
+      title: 'Isiza Pay - P2P',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
       ),
+      home: const MyHomePage(title: 'Isiza Pay'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
+class MyHomePage extends ConsumerWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
 
   final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        title: Text(title),
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
@@ -85,21 +64,24 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ],
       ),
-      body: provider.Consumer2<P2PService, PaymentService>(
-        builder: (context, p2pService, paymentService, child) {
+      body: Consumer(
+        builder: (context, ref, child) {
+          final p2pService = ref.watch(p2pServiceProvider);
+          final paymentService = ref.watch(paymentServiceProvider);
+          
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                _buildBalanceCard(paymentService),
+                _buildBalanceCard(ref, paymentService),
                 const SizedBox(height: 20),
                 _buildConnectionStatus(p2pService),
                 const SizedBox(height: 20),
-                _buildPaymentActions(p2pService),
+                _buildPaymentActions(context, p2pService),
                 const SizedBox(height: 20),
                 _buildP2PActions(context, p2pService),
                 const SizedBox(height: 20),
-                _buildIncomingRequests(paymentService),
+                _buildIncomingRequests(context, paymentService),
               ],
             ),
           );
@@ -108,55 +90,51 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget _buildBalanceCard(PaymentService paymentService) {
-    return Consumer(
-      builder: (context, ref, child) {
-        final blockchainState = ref.watch(blockchainViewModelProvider);
-        
-        return Card(
-          color: Colors.green.shade50,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.account_balance_wallet,
-                  size: 48,
-                  color: Colors.green.shade600,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Your Balance',
-                  style: TextStyle(
-                    color: Colors.green.shade800,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (blockchainState.isLoading)
-                  const CircularProgressIndicator()
-                else
-                  Text(
-                    '\$${blockchainState.balance.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: Colors.green.shade900,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                if (blockchainState.error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Error: ${blockchainState.error}',
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
-                    ),
-                  ),
-              ],
+  Widget _buildBalanceCard(WidgetRef ref, dynamic paymentService) {
+    final blockchainState = ref.watch(blockchainViewModelProvider);
+    
+    return Card(
+      color: Colors.green.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Icon(
+              Icons.account_balance_wallet,
+              size: 48,
+              color: Colors.green.shade600,
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 12),
+            Text(
+              'Your Balance',
+              style: TextStyle(
+                color: Colors.green.shade800,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (blockchainState.isLoading)
+              const CircularProgressIndicator()
+            else
+              Text(
+                '\$${blockchainState.balance.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: Colors.green.shade900,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            if (blockchainState.error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Error: ${blockchainState.error}',
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -209,7 +187,7 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget _buildPaymentActions(P2PService p2pService) {
+  Widget _buildPaymentActions(BuildContext context, P2PService p2pService) {
     final hasConnectedDevices = p2pService.connectedDevices.isNotEmpty;
 
     return Card(
@@ -340,7 +318,7 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget _buildIncomingRequests(PaymentService paymentService) {
+  Widget _buildIncomingRequests(BuildContext context, PaymentService paymentService) {
     final incomingRequests = paymentService.incomingRequests
         .where((request) => request.status == PaymentRequestStatus.pending)
         .toList();

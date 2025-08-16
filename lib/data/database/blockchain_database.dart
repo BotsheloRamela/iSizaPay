@@ -1,6 +1,8 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
+import '../../core/utils/logger.dart' show logger;
+
 class BlockchainDatabase {
   static final BlockchainDatabase _instance = BlockchainDatabase._internal();
   factory BlockchainDatabase() => _instance;
@@ -26,7 +28,8 @@ class BlockchainDatabase {
   }
 
   Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
+    try {
+      await db.execute('''
       CREATE TABLE blocks (
         hash TEXT PRIMARY KEY,
         previousHash TEXT NOT NULL,
@@ -37,7 +40,7 @@ class BlockchainDatabase {
       )
     ''');
 
-    await db.execute('''
+      await db.execute('''
       CREATE TABLE transactions (
         id TEXT PRIMARY KEY,
         senderPublicKey TEXT NOT NULL,
@@ -53,21 +56,24 @@ class BlockchainDatabase {
       )
     ''');
 
-    await db.execute('''
+      await db.execute('''
       CREATE INDEX idx_transactions_sender ON transactions(senderPublicKey)
     ''');
 
-    await db.execute('''
+      await db.execute('''
       CREATE INDEX idx_transactions_receiver ON transactions(receiverPublicKey)
     ''');
 
-    await db.execute('''
+      await db.execute('''
       CREATE INDEX idx_transactions_timestamp ON transactions(timestamp)
     ''');
 
-    await db.execute('''
+      await db.execute('''
       CREATE INDEX idx_blocks_timestamp ON blocks(timestamp)
     ''');
+    } catch (e) {
+      logger.e('Error creating database tables: $e');
+    }
   }
 
   Future<void> close() async {

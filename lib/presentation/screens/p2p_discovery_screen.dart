@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isiza_pay/presentation/screens/p2p_connection_screen.dart';
 import 'package:isiza_pay/presentation/widgets/error_dialog.dart';
 import 'package:isiza_pay/services/p2p_service.dart';
-import 'package:provider/provider.dart';
-class P2PDiscoveryScreen extends StatefulWidget {
+import 'package:isiza_pay/core/di/providers.dart';
+
+class P2PDiscoveryScreen extends ConsumerStatefulWidget {
   const P2PDiscoveryScreen({super.key});
 
   @override
-  State<P2PDiscoveryScreen> createState() => _P2PDiscoveryScreenState();
+  ConsumerState<P2PDiscoveryScreen> createState() => _P2PDiscoveryScreenState();
 }
 
-class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
+class _P2PDiscoveryScreenState extends ConsumerState<P2PDiscoveryScreen> {
   late P2PService _p2pService;
 
   @override
   void initState() {
     super.initState();
-    _p2pService = Provider.of<P2PService>(context, listen: false);
+    _p2pService = ref.read(p2pServiceProvider);
     _p2pService.addListener(_handleServiceErrors);
   }
 
@@ -53,8 +55,9 @@ class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
         title: const Text('P2P Discovery'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          Consumer<P2PService>(
-            builder: (context, service, child) {
+          Consumer(
+            builder: (context, ref, child) {
+              final service = ref.watch(p2pServiceProvider);
               return PopupMenuButton<String>(
                 onSelected: _handleMenuAction,
                 itemBuilder: (context) => [
@@ -100,8 +103,9 @@ class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
           ),
         ],
       ),
-      body: Consumer<P2PService>(
-        builder: (context, service, child) {
+      body: Consumer(
+        builder: (context, ref, child) {
+          final service = ref.watch(p2pServiceProvider);
           return Column(
             children: [
               _buildStatusCard(service),
@@ -113,8 +117,9 @@ class _P2PDiscoveryScreenState extends State<P2PDiscoveryScreen> {
           );
         },
       ),
-      floatingActionButton: Consumer<P2PService>(
-        builder: (context, service, child) {
+      floatingActionButton: Consumer(
+        builder: (context, ref, child) {
+          final service = ref.watch(p2pServiceProvider);
           final isDisconnected = service.status == P2PConnectionStatus.disconnected;
           return FloatingActionButton(
             onPressed: isDisconnected ? _startDiscoveryWithPermissionGuide : null,

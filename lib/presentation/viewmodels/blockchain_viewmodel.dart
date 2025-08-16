@@ -142,6 +142,7 @@ class BlockchainNotifier extends StateNotifier<BlockchainState> {
       
       state = state.copyWith(isLoading: false);
     } catch (e) {
+      logger.e('Error creating transaction: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to create transaction: ${e.toString()}',
@@ -160,6 +161,7 @@ class BlockchainNotifier extends StateNotifier<BlockchainState> {
       
       await _validateChain();
     } catch (e) {
+      logger.e('Error creating block: $e');
       state = state.copyWith(
         error: 'Failed to create block: ${e.toString()}',
       );

@@ -9,6 +9,8 @@ import 'package:isiza_pay/domain/usecases/get_transaction_history_usecase.dart';
 import 'package:isiza_pay/domain/usecases/get_balance_usecase.dart';
 import 'package:isiza_pay/domain/usecases/create_block_usecase.dart';
 import 'package:isiza_pay/presentation/viewmodels/blockchain_viewmodel.dart';
+import 'package:isiza_pay/services/p2p_service.dart';
+import 'package:isiza_pay/services/payment_service.dart';
 
 final blockchainDatabaseProvider = Provider((ref) => BlockchainDatabase());
 
@@ -45,3 +47,13 @@ final blockchainViewModelProvider = StateNotifierProvider<BlockchainNotifier, Bl
     ref.read(createBlockUseCaseProvider),
   ),
 );
+
+// P2P Service Provider
+final p2pServiceProvider = ChangeNotifierProvider<P2PService>((ref) {
+  return P2PService();
+});
+
+// Payment Service Provider  
+final paymentServiceProvider = ChangeNotifierProvider<PaymentService>((ref) {
+  return PaymentService();
+});

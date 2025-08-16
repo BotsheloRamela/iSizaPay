@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isiza_pay/domain/entities/payment_request.dart';
 import 'package:isiza_pay/domain/entities/transaction.dart';
 import 'package:isiza_pay/domain/enums/payment_request_status.dart';
 import 'package:isiza_pay/domain/enums/transaction_status.dart';
-import 'package:provider/provider.dart';
-import '../../services/payment_service.dart';
+import 'package:isiza_pay/core/di/providers.dart';
 
-class TransactionHistoryScreen extends StatelessWidget {
+class TransactionHistoryScreen extends ConsumerWidget {
   const TransactionHistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final paymentService = ref.watch(paymentServiceProvider);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Transaction History'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          Consumer<PaymentService>(
-            builder: (context, paymentService, child) {
+          Consumer(
+            builder: (context, ref, child) {
+              final paymentService = ref.watch(paymentServiceProvider);
               final pendingCount = paymentService.getPendingBlockchainTransactions().length;
               return Row(
                 mainAxisSize: MainAxisSize.min,
@@ -77,8 +80,9 @@ class TransactionHistoryScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Consumer<PaymentService>(
-        builder: (context, paymentService, child) {
+      body: Consumer(
+        builder: (context, ref, child) {
+          final paymentService = ref.watch(paymentServiceProvider);
           return Column(
             children: [
               _buildSummaryCard(paymentService),
@@ -90,11 +94,13 @@ class TransactionHistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCard(PaymentService paymentService) {
+  Widget _buildSummaryCard(dynamic paymentService) {
     final transactions = paymentService.transactions;
-    final totalSent = transactions
-        .map((t) => t.amount)
-        .fold<num>(0, (sum, amount) => sum + amount);
+    final totalSent = transactions.isNotEmpty
+        ? transactions
+            .map<num>((dynamic t) => (t.amount as num))
+            .fold<num>(0, (num sum, num amount) => sum + amount)
+        : 0;
     
     final paymentRequests = paymentService.paymentRequests;
     final completedRequests = paymentRequests
@@ -210,7 +216,7 @@ class TransactionHistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTransactionsList(PaymentService paymentService) {
+  Widget _buildTransactionsList(dynamic paymentService) {
     final transactions = paymentService.transactions;
     final paymentRequests = paymentService.paymentRequests;
 
@@ -535,7 +541,7 @@ class TransactionHistoryScreen extends StatelessWidget {
     // For now, we'll keep it simple
   }
 
-  void _syncWithBlockchain(BuildContext context, PaymentService paymentService) {
+  void _syncWithBlockchain(BuildContext context, dynamic paymentService) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -612,7 +618,7 @@ class TransactionHistoryScreen extends StatelessWidget {
     );
   }
 
-  void _showClearHistoryDialog(BuildContext context, PaymentService paymentService) {
+  void _showClearHistoryDialog(BuildContext context, dynamic paymentService) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
