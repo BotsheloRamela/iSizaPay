@@ -1,5 +1,5 @@
-// lib/features/blockchain/domain/repositories/blockchain_repository.dart
-import '../entities/transaction_entity.dart';
+
+import 'package:isiza_pay/domain/entities/transaction.dart';
 
 abstract class BlockchainRepository {
   Future<void> sendTransaction(TransactionEntity tx);

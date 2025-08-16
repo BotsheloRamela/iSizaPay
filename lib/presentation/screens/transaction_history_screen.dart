@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:isiza_pay/domain/entities/payment_request.dart';
+import 'package:isiza_pay/domain/entities/transaction.dart';
+import 'package:isiza_pay/domain/enums/payment_request_status.dart';
+import 'package:isiza_pay/domain/enums/transaction_status.dart';
 import 'package:provider/provider.dart';
 import '../../services/payment_service.dart';
-import '../../domain/models/transaction.dart';
 
 class TransactionHistoryScreen extends StatelessWidget {
   const TransactionHistoryScreen({super.key});
@@ -219,8 +222,8 @@ class TransactionHistoryScreen extends StatelessWidget {
 
     // Sort by timestamp (newest first)
     allItems.sort((a, b) {
-      final aTime = a is Transaction ? a.timestamp : (a as PaymentRequest).timestamp;
-      final bTime = b is Transaction ? b.timestamp : (b as PaymentRequest).timestamp;
+      final aTime = a is TransactionEntity ? a.timestamp : (a as PaymentRequest).timestamp;
+      final bTime = b is TransactionEntity ? b.timestamp : (b as PaymentRequest).timestamp;
       return bTime.compareTo(aTime);
     });
 
@@ -254,7 +257,7 @@ class TransactionHistoryScreen extends StatelessWidget {
                     itemCount: allItems.length,
                     itemBuilder: (context, index) {
                       final item = allItems[index];
-                      if (item is Transaction) {
+                      if (item is TransactionEntity) {
                         return _buildTransactionCard(item);
                       } else {
                         return _buildPaymentRequestCard(item as PaymentRequest);
@@ -300,7 +303,7 @@ class TransactionHistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTransactionCard(Transaction transaction) {
+  Widget _buildTransactionCard(TransactionEntity transaction) {
     final isOutgoing = true; // Assuming all stored transactions are outgoing for now
     final timeSinceTransaction = DateTime.now().difference(transaction.timestamp);
     final timeText = _formatTimeDifference(timeSinceTransaction);
@@ -323,7 +326,7 @@ class TransactionHistoryScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              isOutgoing ? 'To: ${transaction.toDevice}' : 'From: ${transaction.fromDevice}',
+              isOutgoing ? 'To: ${transaction.receiver}' : 'From: ${transaction.sender}',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey.shade600,
@@ -522,7 +525,7 @@ class TransactionHistoryScreen extends StatelessWidget {
     }
   }
 
-  void _showTransactionDetails(Transaction transaction) {
+  void _showTransactionDetails(TransactionEntity transaction) {
     // This would show a detailed transaction view
     // For now, we'll keep it simple
   }

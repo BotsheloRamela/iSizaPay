@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:isiza_pay/domain/entities/transaction.dart';
 import 'payment_service.dart';
-import '../domain/models/transaction.dart';
 
 /// Service responsible for synchronizing offline transactions with the Solana blockchain
 /// via Firebase Functions
@@ -59,7 +59,7 @@ class BlockchainSyncService extends ChangeNotifier {
   }
   
   /// Submit a single transaction to the blockchain via Firebase Function
-  Future<void> _submitTransactionToBlockchain(Transaction transaction) async {
+  Future<void> _submitTransactionToBlockchain(TransactionEntity transaction) async {
     try {
       final requestBody = {
         'transaction': transaction.toJson(),

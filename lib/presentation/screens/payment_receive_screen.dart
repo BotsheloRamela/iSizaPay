@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:isiza_pay/domain/entities/payment_request.dart';
+import 'package:isiza_pay/domain/enums/payment_request_status.dart';
 import 'package:provider/provider.dart';
 import '../../services/payment_service.dart';
 import '../../services/p2p_service.dart';

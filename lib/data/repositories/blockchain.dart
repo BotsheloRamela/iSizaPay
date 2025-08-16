@@ -1,9 +1,9 @@
+import 'package:isiza_pay/data/models/transaction.dart';
+import 'package:isiza_pay/data/solscan/solscan_service.dart';
+import 'package:isiza_pay/domain/entities/transaction.dart';
+import 'package:isiza_pay/domain/repositories/blockchain.dart';
 import 'package:solana/solana.dart';
 import 'package:sqflite/sqflite.dart';
-import '../../domain/entities/transaction_entity.dart';
-import '../../domain/repositories/blockchain_repository.dart';
-import '../solscan/solscan_service.dart';
-import '../models/transaction_model.dart';
 
 class BlockchainRepositoryImpl implements BlockchainRepository {
   final RpcClient client;
