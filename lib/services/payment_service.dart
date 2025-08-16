@@ -1,86 +1,19 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import '../domain/models/transaction.dart';
-
-enum PaymentRequestStatus {
-  pending,
-  accepted,
-  rejected,
-  completed,
-  failed,
-}
-
-class PaymentRequest {
-  final String id;
-  final String fromDevice;
-  final String toDevice;
-  final num amount;
-  final String description;
-  final DateTime timestamp;
-  final PaymentRequestStatus status;
-
-  PaymentRequest({
-    required this.id,
-    required this.fromDevice,
-    required this.toDevice,
-    required this.amount,
-    required this.description,
-    required this.timestamp,
-    this.status = PaymentRequestStatus.pending,
-  });
-
-  PaymentRequest copyWith({
-    PaymentRequestStatus? status,
-  }) {
-    return PaymentRequest(
-      id: id,
-      fromDevice: fromDevice,
-      toDevice: toDevice,
-      amount: amount,
-      description: description,
-      timestamp: timestamp,
-      status: status ?? this.status,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'fromDevice': fromDevice,
-      'toDevice': toDevice,
-      'amount': amount,
-      'description': description,
-      'timestamp': timestamp.toIso8601String(),
-      'status': status.name,
-    };
-  }
-
-  factory PaymentRequest.fromJson(Map<String, dynamic> json) {
-    return PaymentRequest(
-      id: json['id'] as String,
-      fromDevice: json['fromDevice'] as String,
-      toDevice: json['toDevice'] as String,
-      amount: json['amount'] as num,
-      description: json['description'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String),
-      status: PaymentRequestStatus.values.firstWhere(
-        (e) => e.name == json['status'],
-        orElse: () => PaymentRequestStatus.pending,
-      ),
-    );
-  }
-}
+import 'package:isiza_pay/domain/entities/payment_request.dart';
+import 'package:isiza_pay/domain/entities/transaction.dart';
+import 'package:isiza_pay/domain/enums/payment_request_status.dart';
+import 'package:isiza_pay/domain/enums/transaction_status.dart';
 
 class PaymentService extends ChangeNotifier {
-  final List<Transaction> _transactions = [];
+  final List<TransactionEntity> _transactions = [];
   final List<PaymentRequest> _paymentRequests = [];
   final List<PaymentRequest> _incomingRequests = [];
   
   num _confirmedBalance = 1000.0; // Starting balance for demo - only confirmed transactions
   
-  List<Transaction> get transactions => List.unmodifiable(_transactions);
+  List<TransactionEntity> get transactions => List.unmodifiable(_transactions);
   List<PaymentRequest> get paymentRequests => List.unmodifiable(_paymentRequests);
   List<PaymentRequest> get incomingRequests => List.unmodifiable(_incomingRequests);
   
@@ -90,7 +23,7 @@ class PaymentService extends ChangeNotifier {
   // Available balance - includes pending incoming transactions (trust float)
   num get availableBalance {
     final pendingIncoming = _transactions
-        .where((t) => t.status == TransactionStatus.pendingOffline && t.toDevice == getCurrentDeviceId())
+        .where((t) => t.status == TransactionStatus.pendingOffline && t.receiver == getCurrentDeviceId())
         .map((t) => t.amount)
         .fold<num>(0, (sum, amount) => sum + amount);
     
@@ -101,12 +34,12 @@ class PaymentService extends ChangeNotifier {
   num get balance => availableBalance;
   
   // Separate getters for different transaction types
-  List<Transaction> get confirmedTransactions => 
+  List<TransactionEntity> get confirmedTransactions =>
     _transactions.where((t) => t.status == TransactionStatus.confirmed).toList();
-  
-  List<Transaction> get pendingTransactions => 
+
+  List<TransactionEntity> get pendingTransactions =>
     _transactions.where((t) => t.status != TransactionStatus.confirmed).toList();
-  
+
   String? getCurrentDeviceId() {
     // This would be implemented to get current device ID
     // For now returning null, should be injected from P2PService
@@ -165,12 +98,12 @@ class PaymentService extends ChangeNotifier {
     }
   }
 
-  Transaction acceptPaymentRequest(String requestId, String currentDeviceId) {
+  TransactionEntity acceptPaymentRequest(String requestId, String currentDeviceId) {
     final requestIndex = _incomingRequests.indexWhere((r) => r.id == requestId);
     if (requestIndex == -1) throw ArgumentError('Payment request not found');
 
     final request = _incomingRequests[requestIndex];
-    
+
     // Check if we have sufficient confirmed balance to send
     if (request.amount > _confirmedBalance) {
       // Update request status to failed
@@ -184,10 +117,10 @@ class PaymentService extends ChangeNotifier {
 
     // Create and process transaction
     final transactionId = _generateTransactionId();
-    final transaction = Transaction(
+    final transaction = TransactionEntity(
       id: transactionId,
-      fromDevice: currentDeviceId,
-      toDevice: request.fromDevice,
+      sender: currentDeviceId,
+      receiver: request.fromDevice,
       amount: request.amount,
       timestamp: DateTime.now(),
       signature: _generateSignature(transactionId, currentDeviceId, request.fromDevice, request.amount),
@@ -198,7 +131,7 @@ class PaymentService extends ChangeNotifier {
     // Update request status to completed
     _incomingRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.completed);
     notifyListeners();
-    
+
     return transaction;
   }
 
@@ -229,7 +162,7 @@ class PaymentService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Transaction createDirectTransaction({
+  TransactionEntity createDirectTransaction({
     required String fromDevice,
     required String toDevice,
     required num amount,
@@ -242,10 +175,10 @@ class PaymentService extends ChangeNotifier {
       throw ArgumentError('Insufficient confirmed balance');
     }
 
-    final transaction = Transaction(
+    final transaction = TransactionEntity(
       id: _generateTransactionId(),
-      fromDevice: fromDevice,
-      toDevice: toDevice,
+      sender: fromDevice,
+      receiver: toDevice,
       amount: amount,
       timestamp: DateTime.now(),
       signature: _generateSignature(_generateTransactionId(), fromDevice, toDevice, amount),
@@ -255,26 +188,26 @@ class PaymentService extends ChangeNotifier {
     return transaction;
   }
 
-  void receiveTransaction(Transaction transaction) {
+  void receiveTransaction(TransactionEntity transaction) {
     // Add to transactions as pending (no balance update until confirmed)
     _transactions.add(transaction);
-    
+
     // Find and complete any corresponding payment request
-    final requestIndex = _paymentRequests.indexWhere((r) => 
-      r.fromDevice == transaction.toDevice && 
+    final requestIndex = _paymentRequests.indexWhere((r) =>
+      r.fromDevice == transaction.receiver &&
       r.amount == transaction.amount &&
       r.status == PaymentRequestStatus.pending
     );
-    
+
     if (requestIndex != -1) {
       final request = _paymentRequests[requestIndex];
       _paymentRequests[requestIndex] = request.copyWith(status: PaymentRequestStatus.completed);
     }
-    
+
     notifyListeners();
   }
 
-  void _processTransaction(Transaction transaction) {
+  void _processTransaction(TransactionEntity transaction) {
     // Add to transactions as pending (no balance update until confirmed)
     _transactions.add(transaction);
     // Note: Balance is not deducted until blockchain confirmation
@@ -282,14 +215,14 @@ class PaymentService extends ChangeNotifier {
   }
 
   // Blockchain synchronization methods
-  
+
   /// Get all transactions that need to be submitted to blockchain
-  List<Transaction> getPendingBlockchainTransactions() {
+  List<TransactionEntity> getPendingBlockchainTransactions() {
     return _transactions
         .where((t) => t.status == TransactionStatus.pendingOffline)
         .toList();
   }
-  
+
   /// Mark transaction as submitted to blockchain
   void markTransactionSubmitted(String transactionId, String blockchainTxId) {
     final index = _transactions.indexWhere((t) => t.id == transactionId);
@@ -301,7 +234,7 @@ class PaymentService extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   /// Confirm transaction on blockchain (updates balances)
   void confirmTransaction(String transactionId, {DateTime? confirmedAt}) {
     final index = _transactions.indexWhere((t) => t.id == transactionId);
@@ -311,20 +244,20 @@ class PaymentService extends ChangeNotifier {
         status: TransactionStatus.confirmed,
         confirmedAt: confirmedAt ?? DateTime.now(),
       );
-      
+
       // Update confirmed balance based on transaction direction
-      if (transaction.fromDevice == getCurrentDeviceId()) {
+      if (transaction.sender == getCurrentDeviceId()) {
         // Outgoing transaction - deduct from confirmed balance
         _confirmedBalance -= transaction.amount;
       } else {
         // Incoming transaction - add to confirmed balance
         _confirmedBalance += transaction.amount;
       }
-      
+
       notifyListeners();
     }
   }
-  
+
   /// Mark transaction as failed
   void failTransaction(String transactionId, String error) {
     final index = _transactions.indexWhere((t) => t.id == transactionId);
@@ -336,14 +269,14 @@ class PaymentService extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   /// Sync with blockchain - to be called when online
   Future<void> syncWithBlockchain() async {
     // This would be implemented to:
     // 1. Submit pending transactions to Firebase Function
     // 2. Check status of pending blockchain transactions
     // 3. Update transaction statuses and balances accordingly
-    // 
+    //
     // Example implementation would call your Firebase Function here
     debugPrint('Syncing ${getPendingBlockchainTransactions().length} pending transactions with blockchain...');
   }
@@ -373,7 +306,7 @@ class PaymentService extends ChangeNotifier {
     };
   }
 
-  Map<String, dynamic> getTransactionMessage(Transaction transaction) {
+  Map<String, dynamic> getTransactionMessage(TransactionEntity transaction) {
     return {
       'type': 'transaction',
       'data': transaction.toJson(),
@@ -401,7 +334,7 @@ class PaymentService extends ChangeNotifier {
         }
         break;
       case 'transaction':
-        final transaction = Transaction.fromJson(data);
+        final transaction = TransactionEntity.fromJson(data);
         receiveTransaction(transaction);
         break;
     }
