@@ -12,6 +12,7 @@ class TransactionHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final paymentService = ref.watch(paymentServiceProvider);
+    final blockchainState = ref.watch(blockchainViewModelProvider);
     
     return Scaffold(
       appBar: AppBar(
@@ -25,6 +26,11 @@ class TransactionHistoryScreen extends ConsumerWidget {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    onPressed: () => _refreshFromBlockchain(context, paymentService),
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh from blockchain database',
+                  ),
                   if (pendingCount > 0)
                     IconButton(
                       onPressed: () => _syncWithBlockchain(context, paymentService),
@@ -83,9 +89,10 @@ class TransactionHistoryScreen extends ConsumerWidget {
       body: Consumer(
         builder: (context, ref, child) {
           final paymentService = ref.watch(paymentServiceProvider);
+          final blockchainState = ref.watch(blockchainViewModelProvider);
           return Column(
             children: [
-              _buildSummaryCard(paymentService),
+              _buildSummaryCard(paymentService, blockchainState),
               _buildTransactionsList(paymentService),
             ],
           );
@@ -94,7 +101,7 @@ class TransactionHistoryScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryCard(dynamic paymentService) {
+  Widget _buildSummaryCard(dynamic paymentService, dynamic blockchainState) {
     final transactions = paymentService.transactions;
     final totalSent = transactions.isNotEmpty
         ? transactions
@@ -137,7 +144,7 @@ class TransactionHistoryScreen extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: _buildSummaryItem(
-                      'Available Balance',
+                      'PaymentService Balance',
                       '\$${paymentService.balance.toStringAsFixed(2)}',
                       Icons.account_balance_wallet,
                       Colors.green,
@@ -146,8 +153,8 @@ class TransactionHistoryScreen extends ConsumerWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildSummaryItem(
-                      'Confirmed Balance',
-                      '\$${paymentService.confirmedBalance.toStringAsFixed(2)}',
+                      'Blockchain Balance',
+                      '\$${blockchainState.balance.toStringAsFixed(2)}',
                       Icons.verified,
                       Colors.blue,
                     ),
@@ -539,6 +546,25 @@ class TransactionHistoryScreen extends ConsumerWidget {
   void _showPaymentRequestDetails(PaymentRequest request) {
     // This would show detailed payment request info
     // For now, we'll keep it simple
+  }
+
+  void _refreshFromBlockchain(BuildContext context, dynamic paymentService) async {
+    try {
+      await paymentService.refreshFromBlockchain();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Refreshed from blockchain database'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to refresh from blockchain: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _syncWithBlockchain(BuildContext context, dynamic paymentService) {

@@ -32,9 +32,18 @@ class MyApp extends ConsumerWidget {
     // Set up blockchain viewmodel reference in payment service
     paymentService.setBlockchainViewModel(blockchainViewModel);
     
+    // Refresh PaymentService from blockchain database after blockchain is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await paymentService.refreshFromBlockchain();
+    });
+    
     // Set up callback to notify PaymentService when blockchain transactions are created
     blockchainViewModel.onTransactionCreated = (transaction) {
       paymentService.addBlockchainTransaction(transaction);
+      // Also refresh blockchain balance after a short delay to ensure transaction is processed
+      Future.delayed(const Duration(milliseconds: 500), () {
+        blockchainViewModel.refreshData();
+      });
     };
     
     return MaterialApp(

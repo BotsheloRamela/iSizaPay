@@ -51,6 +51,10 @@ final paymentServiceProvider = ChangeNotifierProvider<PaymentService>((ref) {
   final p2pService = ref.read(p2pServiceProvider.notifier);
   paymentService.setP2PService(p2pService);
   
+  // Initialize blockchain repository reference for persistent storage
+  final blockchainRepository = ref.read(blockchainRepositoryProvider);
+  paymentService.setBlockchainRepository(blockchainRepository);
+  
   // Set up message handling for payment messages
   p2pService.onMessageReceived = (String endpointId, Map<String, dynamic> message) {
     paymentService.handleIncomingMessage(message);

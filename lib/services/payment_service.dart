@@ -20,6 +20,15 @@ class PaymentService extends ChangeNotifier {
   // Blockchain ViewModel for submitting transactions to blockchain
   dynamic _blockchainViewModel;
   
+  // Blockchain Repository for accessing persistent storage
+  dynamic _blockchainRepository;
+  
+  // Current device public key for balance calculations
+  String? _currentDevicePublicKey;
+  
+  // Flag to track if we've synced with blockchain on startup
+  bool _hasInitializedFromBlockchain = false;
+  
   // Callback for blockchain transaction creation
   Function(TransactionEntity)? onBlockchainTransactionCreated;
   
@@ -58,6 +67,47 @@ class PaymentService extends ChangeNotifier {
   // Initialize blockchain viewmodel reference
   void setBlockchainViewModel(dynamic blockchainViewModel) {
     _blockchainViewModel = blockchainViewModel;
+    _syncCurrentDevicePublicKey();
+  }
+
+  // Initialize blockchain repository reference
+  void setBlockchainRepository(dynamic blockchainRepository) {
+    _blockchainRepository = blockchainRepository;
+    _initializeFromBlockchain();
+  }
+
+  void _syncCurrentDevicePublicKey() {
+    if (_blockchainViewModel != null) {
+      _currentDevicePublicKey = _blockchainViewModel.publicKey;
+      debugPrint('PaymentService: Synced device public key: $_currentDevicePublicKey');
+    }
+  }
+
+  Future<void> _initializeFromBlockchain() async {
+    if (_hasInitializedFromBlockchain || _blockchainRepository == null) return;
+    
+    try {
+      debugPrint('PaymentService: Initializing from blockchain database...');
+      
+      // Load transactions from blockchain database
+      final blockchainTransactions = await _blockchainRepository.getTransactionHistory();
+      
+      // Clear current in-memory transactions and replace with blockchain data
+      _transactions.clear();
+      _transactions.addAll(blockchainTransactions);
+      
+      // Update balance from blockchain
+      if (_currentDevicePublicKey != null && _currentDevicePublicKey!.isNotEmpty) {
+        _confirmedBalance = await _blockchainRepository.getBalance(_currentDevicePublicKey!);
+        debugPrint('PaymentService: Loaded balance from blockchain: \$${_confirmedBalance.toStringAsFixed(2)}');
+      }
+      
+      _hasInitializedFromBlockchain = true;
+      debugPrint('PaymentService: Loaded ${_transactions.length} transactions from blockchain database');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('PaymentService: Failed to initialize from blockchain: $e');
+    }
   }
 
   String? getCurrentDeviceId() {
@@ -306,8 +356,32 @@ class PaymentService extends ChangeNotifier {
     if (!exists) {
       _transactions.add(transaction);
       debugPrint('PaymentService: Added blockchain transaction ${transaction.id} to transaction history');
+      
+      // Refresh balance from blockchain repository instead of manual calculation
+      _refreshBalanceFromBlockchain();
+      
       notifyListeners();
     }
+  }
+
+  // Method to refresh balance from blockchain repository
+  Future<void> _refreshBalanceFromBlockchain() async {
+    if (_blockchainRepository != null && _currentDevicePublicKey != null && _currentDevicePublicKey!.isNotEmpty) {
+      try {
+        final newBalance = await _blockchainRepository.getBalance(_currentDevicePublicKey!);
+        _confirmedBalance = newBalance;
+        debugPrint('PaymentService: Updated balance from blockchain: \$${_confirmedBalance.toStringAsFixed(2)}');
+      } catch (e) {
+        debugPrint('PaymentService: Failed to refresh balance from blockchain: $e');
+      }
+    }
+  }
+
+  // Method to refresh data from blockchain database
+  Future<void> refreshFromBlockchain() async {
+    _hasInitializedFromBlockchain = false;
+    _syncCurrentDevicePublicKey();
+    await _initializeFromBlockchain();
   }
 
   void _processTransaction(TransactionEntity transaction) {

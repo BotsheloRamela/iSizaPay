@@ -95,7 +95,7 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
 
       return List.generate(maps.length, (i) {
         final transaction = TransactionEntity.fromJson(maps[i]);
-        AppLogger.d('Transaction from DB', 'db:transaction:get ${transaction.toJson()}');
+        // AppLogger.d('Transaction from DB', 'db:transaction:get ${transaction.toJson()}');
         return transaction;
       });
     } catch (e) {

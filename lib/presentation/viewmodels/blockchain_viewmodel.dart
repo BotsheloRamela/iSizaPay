@@ -116,6 +116,7 @@ class BlockchainNotifier extends StateNotifier<BlockchainState> {
       final balance = await _getBalanceUseCase.execute(publicKey);
       AppLogger.i('Balance loaded', 'Balance: \$${balance.toStringAsFixed(2)}');
       state = state.copyWith(balance: balance);
+      logger.d('BlockchainViewModel: Balance updated to \$${balance.toStringAsFixed(2)} for key: $publicKey');
     } else {
       AppLogger.w('Cannot load balance - keyPair is null');
     }
