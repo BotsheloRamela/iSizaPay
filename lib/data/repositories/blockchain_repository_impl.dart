@@ -6,6 +6,7 @@ import 'package:isiza_pay/domain/entities/block.dart';
 import 'package:isiza_pay/domain/entities/transaction.dart';
 import 'package:isiza_pay/domain/repositories/blockchain.dart';
 import 'package:isiza_pay/data/database/blockchain_database.dart';
+import 'package:isiza_pay/core/utils/logger.dart';
 
 class BlockchainRepositoryImpl implements BlockchainRepository {
   final BlockchainDatabase _database;
@@ -15,6 +16,7 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
   @override
   Future<void> addTransaction(TransactionEntity transaction) async {
     final db = await _database.database;
+    AppLogger.d('Adding transaction to DB', 'db:transaction:add ${transaction.toJson()}');
     await db.insert(
       'transactions',
       transaction.toJson(),
@@ -59,6 +61,7 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
   @override
   Future<void> addBlock(BlockEntity block) async {
     final db = await _database.database;
+    AppLogger.d('Adding block to DB', 'db:block:add ${block.toJson()}');
     await db.insert(
       'blocks',
       block.toJson(),
@@ -75,7 +78,9 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
     );
 
     return List.generate(maps.length, (i) {
-      return TransactionEntity.fromJson(maps[i]);
+      final transaction = TransactionEntity.fromJson(maps[i]);
+      AppLogger.d('Transaction from DB', 'db:transaction:get ${transaction.toJson()}');
+      return transaction;
     });
   }
 
@@ -88,7 +93,9 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
     );
 
     return List.generate(maps.length, (i) {
-      return BlockEntity.fromJson(maps[i]);
+      final block = BlockEntity.fromJson(maps[i]);
+      AppLogger.d('Block from DB', 'db:block:get ${block.toJson()}');
+      return block;
     });
   }
 
@@ -132,7 +139,9 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
     );
 
     if (maps.isNotEmpty) {
-      return TransactionEntity.fromJson(maps.first);
+      final transaction = TransactionEntity.fromJson(maps.first);
+      AppLogger.d('Transaction from DB by ID', transaction.toJson());
+      return transaction;
     }
     return null;
   }
@@ -147,7 +156,9 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
     );
 
     if (maps.isNotEmpty) {
-      return BlockEntity.fromJson(maps.first);
+      final block = BlockEntity.fromJson(maps.first);
+      AppLogger.d('Latest block from DB', block.toJson());
+      return block;
     }
     return null;
   }
@@ -155,7 +166,7 @@ class BlockchainRepositoryImpl implements BlockchainRepository {
   @override
   Future<double> getBalance(String publicKey) async {
     final transactions = await getTransactionHistory();
-    double balance = 0.0;
+    double balance = 1000.0; // Starting balance
 
     for (final transaction in transactions) {
       if (transaction.receiverPublicKey == publicKey) {
