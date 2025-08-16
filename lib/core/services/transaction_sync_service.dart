@@ -4,6 +4,7 @@ import 'package:isiza_pay/domain/entities/vendor_info.dart';
 import 'package:isiza_pay/core/firebase/firestore_sync_service.dart';
 import 'package:isiza_pay/core/firebase/firebase_functions_service.dart';
 import 'package:isiza_pay/core/utils/logger.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TransactionSyncService {
   static final TransactionSyncService _instance = TransactionSyncService._internal();

@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isiza_pay/domain/entities/event_transaction.dart';
 import 'package:isiza_pay/domain/entities/vendor_info.dart';
-import 'package:isiza_pay/domain/entities/event_product.dart';
 import 'package:isiza_pay/core/firebase/firebase_config.dart';
 
 class FirestoreSyncService {
@@ -201,32 +200,55 @@ class FirestoreSyncService {
     {String? userType} // 'customer' or 'vendor'
   ) async {
     try {
-      Query query;
-      
       if (userType == 'customer') {
-        query = FirebaseConfig.syncedTransactionsCollection
-            .where('customerId', isEqualTo: userId);
+        final querySnapshot = await FirebaseConfig.syncedTransactionsCollection
+            .where('customerId', isEqualTo: userId)
+            .orderBy('timestamp', descending: true)
+            .limit(100)
+            .get();
+        
+        return querySnapshot.docs.map((doc) {
+          final data = doc.data();
+          return EventTransactionEntity.fromJson(data);
+        }).toList();
       } else if (userType == 'vendor') {
-        query = FirebaseConfig.syncedTransactionsCollection
-            .where('vendorId', isEqualTo: userId);
+        final querySnapshot = await FirebaseConfig.syncedTransactionsCollection
+            .where('vendorId', isEqualTo: userId)
+            .orderBy('timestamp', descending: true)
+            .limit(100)
+            .get();
+        
+        return querySnapshot.docs.map((doc) {
+          final data = doc.data();
+          return EventTransactionEntity.fromJson(data);
+        }).toList();
       } else {
         // Get all transactions for user (both customer and vendor)
-        query = FirebaseConfig.syncedTransactionsCollection
-            .where(Filter.or(
-              Filter.equalTo('customerId', userId),
-              Filter.equalTo('vendorId', userId),
-            ));
+        final customerQuery = FirebaseConfig.syncedTransactionsCollection
+            .where('customerId', isEqualTo: userId);
+        final vendorQuery = FirebaseConfig.syncedTransactionsCollection
+            .where('vendorId', isEqualTo: userId);
+        
+        final customerSnapshot = await customerQuery.get();
+        final vendorSnapshot = await vendorQuery.get();
+        
+        final allDocs = [...customerSnapshot.docs, ...vendorSnapshot.docs];
+        
+        // Sort by timestamp (assuming timestamp is a Timestamp field)
+        allDocs.sort((a, b) {
+          final aTimestamp = a.data()['timestamp'];
+          final bTimestamp = b.data()['timestamp'];
+          if (aTimestamp is Timestamp && bTimestamp is Timestamp) {
+            return bTimestamp.compareTo(aTimestamp);
+          }
+          return 0;
+        });
+        
+        return allDocs.take(100).map((doc) {
+          final data = doc.data();
+          return EventTransactionEntity.fromJson(data);
+        }).toList();
       }
-      
-      final querySnapshot = await query
-          .orderBy('timestamp', descending: true)
-          .limit(100)
-          .get();
-
-      return querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        return EventTransactionEntity.fromJson(data);
-      }).toList();
     } catch (e) {
       throw Exception('Failed to get transaction history: $e');
     }

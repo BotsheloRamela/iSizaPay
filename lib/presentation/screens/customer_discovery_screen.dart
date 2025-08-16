@@ -123,7 +123,7 @@ class _CustomerDiscoveryScreenState extends ConsumerState<CustomerDiscoveryScree
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.store_off,
+              Icons.store,
               size: 64,
               color: Colors.grey.shade400,
             ),
