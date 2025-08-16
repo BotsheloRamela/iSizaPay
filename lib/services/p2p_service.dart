@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
@@ -143,7 +144,7 @@ class P2PService extends ChangeNotifier {
         final status = await permission.request();
         statuses[permission] = status;
         
-        debugPrint('Permission ${permission.toString()}: ${status.toString()}');
+        developer.log('Permission ${permission.toString()}: ${status.toString()}', name: 'p2p:permission');
         
         if (!status.isGranted) {
           deniedPermissions.add(_getPermissionName(permission));
@@ -339,7 +340,7 @@ class P2PService extends ChangeNotifier {
   void _handlePayloadReceived(String endpointId, Payload payload) {
     if (payload.type == PayloadType.BYTES) {
       final messageString = String.fromCharCodes(payload.bytes!);
-      debugPrint('Received message from $endpointId: $messageString');
+      developer.log('Received message from $endpointId: $messageString', name: 'p2p:message:received');
       
       // Try to parse as JSON for payment messages
       try {
@@ -349,7 +350,7 @@ class P2PService extends ChangeNotifier {
         }
       } catch (e) {
         // If not JSON, treat as regular text message
-        debugPrint('Received plain text message: $messageString');
+        developer.log('Received plain text message: $messageString', name: 'p2p:message:received:text');
         if (onMessageReceived != null) {
           onMessageReceived!(endpointId, {'type': 'text', 'content': messageString});
         }

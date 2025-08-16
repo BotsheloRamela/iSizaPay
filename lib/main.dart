@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isiza_pay/domain/enums/payment_request_status.dart';
 import 'package:isiza_pay/presentation/screens/p2p_discovery_screen.dart';
-import 'package:provider/provider.dart';
+import 'package:provider/provider.dart' as provider;
 import 'services/p2p_service.dart';
 import 'services/payment_service.dart';
 import 'presentation/widgets/error_dialog.dart';
 import 'presentation/screens/payment_send_screen.dart';
 import 'presentation/screens/payment_receive_screen.dart';
 import 'presentation/screens/transaction_history_screen.dart';
+import 'package:isiza_pay/core/di/providers.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -18,12 +20,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
+    return provider.MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => P2PService()),
-        ChangeNotifierProvider(create: (context) => PaymentService()),
+        provider.ChangeNotifierProvider(create: (context) => P2PService()),
+        provider.ChangeNotifierProvider(create: (context) => PaymentService()),
       ],
-      child: Consumer2<P2PService, PaymentService>(
+      child: provider.Consumer2<P2PService, PaymentService>(
         builder: (context, p2pService, paymentService, child) {
           // Set up message handling between P2P and Payment services
           p2pService.onMessageReceived = (endpointId, message) {
@@ -83,7 +85,7 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ],
       ),
-      body: Consumer2<P2PService, PaymentService>(
+      body: provider.Consumer2<P2PService, PaymentService>(
         builder: (context, p2pService, paymentService, child) {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -107,37 +109,54 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildBalanceCard(PaymentService paymentService) {
-    return Card(
-      color: Colors.green.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(
-              Icons.account_balance_wallet,
-              size: 48,
-              color: Colors.green.shade600,
+    return Consumer(
+      builder: (context, ref, child) {
+        final blockchainState = ref.watch(blockchainViewModelProvider);
+        
+        return Card(
+          color: Colors.green.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.account_balance_wallet,
+                  size: 48,
+                  color: Colors.green.shade600,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your Balance',
+                  style: TextStyle(
+                    color: Colors.green.shade800,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (blockchainState.isLoading)
+                  const CircularProgressIndicator()
+                else
+                  Text(
+                    '\$${blockchainState.balance.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: Colors.green.shade900,
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                if (blockchainState.error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Error: ${blockchainState.error}',
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Your Balance',
-              style: TextStyle(
-                color: Colors.green.shade800,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              '\$${paymentService.balance.toStringAsFixed(2)}',
-              style: TextStyle(
-                color: Colors.green.shade900,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

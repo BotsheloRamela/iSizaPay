@@ -7,6 +7,7 @@ import 'package:isiza_pay/domain/usecases/validate_chain_usecase.dart';
 import 'package:isiza_pay/domain/usecases/get_transaction_history_usecase.dart';
 import 'package:isiza_pay/domain/usecases/get_balance_usecase.dart';
 import 'package:isiza_pay/domain/usecases/create_block_usecase.dart';
+import 'package:isiza_pay/core/utils/logger.dart';
 
 class BlockchainState {
   final List<TransactionEntity> transactions;
@@ -62,13 +63,21 @@ class BlockchainNotifier extends StateNotifier<BlockchainState> {
     this._getBalanceUseCase,
     this._createBlockUseCase,
   ) : super(const BlockchainState()) {
-    _initializeKeyPair();
-    _loadData();
+    _initialize();
   }
 
-  void _initializeKeyPair() async {
+  Future<void> _initialize() async {
+    AppLogger.i('Initializing blockchain viewmodel');
+    await _initializeKeyPair();
+    await _loadData();
+    AppLogger.i('Blockchain viewmodel initialization complete');
+  }
+
+  Future<void> _initializeKeyPair() async {
+    AppLogger.d('Generating new keyPair');
     final keyPair = await Ed25519HDKeyPair.random();
     state = state.copyWith(keyPair: keyPair);
+    AppLogger.d('KeyPair initialized', 'Public Key: ${keyPair.address}');
   }
 
   Future<void> _loadData() async {
@@ -100,8 +109,12 @@ class BlockchainNotifier extends StateNotifier<BlockchainState> {
   Future<void> _loadBalance() async {
     if (state.keyPair != null) {
       final publicKey = state.keyPair!.address;
+      AppLogger.d('Loading balance for public key', publicKey);
       final balance = await _getBalanceUseCase.execute(publicKey);
+      AppLogger.i('Balance loaded', 'Balance: \$${balance.toStringAsFixed(2)}');
       state = state.copyWith(balance: balance);
+    } else {
+      AppLogger.w('Cannot load balance - keyPair is null');
     }
   }
 
