@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isiza_pay/presentation/screens/p2p_connection_screen.dart';
+import 'package:isiza_pay/presentation/screens/secure_p2p_connection_screen.dart';
 import 'package:isiza_pay/presentation/widgets/error_dialog.dart';
 import 'package:isiza_pay/services/p2p_service.dart';
+import 'package:isiza_pay/services/device_identity_service.dart';
 import 'package:isiza_pay/core/di/providers.dart';
 
 class P2PDiscoveryScreen extends ConsumerStatefulWidget {
@@ -365,14 +367,7 @@ class _P2PDiscoveryScreenState extends ConsumerState<P2PDiscoveryScreen> {
               ),
         onTap: () {
           if (isConnected) {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => P2PConnectionScreen(
-                  deviceId: device.id,
-                  deviceName: device.name,
-                ),
-              ),
-            );
+            _showSecureConnectionOptions(device);
           } else {
             _showDeviceDetails(device, isConnected);
           }
@@ -492,6 +487,129 @@ class _P2PDiscoveryScreenState extends ConsumerState<P2PDiscoveryScreen> {
           _p2pService.stopAll();
         }
         break;
+    }
+  }
+
+  void _showSecureConnectionOptions(PeerDevice device) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Connect to ${device.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Choose connection type:',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 20),
+            _buildConnectionOption(
+              icon: Icons.security,
+              title: 'Secure Connection',
+              description: 'Encrypted P2P with verification',
+              color: Colors.green,
+              onTap: () async {
+                Navigator.of(context).pop();
+                await _startSecureConnection(device);
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildConnectionOption(
+              icon: Icons.link,
+              title: 'Standard Connection',
+              description: 'Basic P2P connection',
+              color: Colors.blue,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => P2PConnectionScreen(
+                      deviceId: device.id,
+                      deviceName: device.name,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectionOption({
+    required IconData icon,
+    required String title,
+    required String description,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 32, color: color),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startSecureConnection(PeerDevice device) async {
+    try {
+      final deviceIdentity = DeviceIdentityService();
+      await deviceIdentity.getOrCreateDeviceIdentity();
+      final beacon = deviceIdentity.createDiscoveryBeacon();
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => SecureP2PConnectionScreen(
+            deviceId: device.id,
+            deviceName: device.name,
+            remotePublicKey: beacon.publicKey, // In real implementation, this would come from the remote device
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start secure connection: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

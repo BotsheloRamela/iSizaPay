@@ -11,6 +11,9 @@ import 'package:isiza_pay/domain/usecases/create_block_usecase.dart';
 import 'package:isiza_pay/presentation/viewmodels/blockchain_viewmodel.dart';
 import 'package:isiza_pay/services/p2p_service.dart';
 import 'package:isiza_pay/services/payment_service.dart';
+import 'package:isiza_pay/services/device_identity_service.dart';
+import 'package:isiza_pay/services/security_handshake_service.dart';
+import 'package:isiza_pay/services/secure_transaction_service.dart';
 
 final blockchainDatabaseProvider = Provider((ref) => BlockchainDatabase());
 
@@ -72,3 +75,19 @@ final blockchainViewModelProvider = StateNotifierProvider<BlockchainNotifier, Bl
     ref.read(createBlockUseCaseProvider),
   ),
 );
+
+// Security Services
+final deviceIdentityServiceProvider = Provider<DeviceIdentityService>((ref) {
+  return DeviceIdentityService();
+});
+
+final securityHandshakeServiceProvider = Provider<SecurityHandshakeService>((ref) {
+  final deviceIdentity = ref.read(deviceIdentityServiceProvider);
+  return SecurityHandshakeService(deviceIdentity);
+});
+
+final secureTransactionServiceProvider = Provider<SecureTransactionService>((ref) {
+  final deviceIdentity = ref.read(deviceIdentityServiceProvider);
+  final handshakeService = ref.read(securityHandshakeServiceProvider);
+  return SecureTransactionService(deviceIdentity, handshakeService);
+});

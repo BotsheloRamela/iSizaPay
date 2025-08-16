@@ -7,18 +7,23 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:isiza_pay/services/device_identity_service.dart';
 
 class PeerDevice {
   final String id;
   final String name;
   final bool isConnected;
   final DateTime discoveredAt;
+  final DiscoveryBeacon? securityBeacon;
+  final bool isSecureVerified;
 
   PeerDevice({
     required this.id,
     required this.name,
     this.isConnected = false,
     required this.discoveredAt,
+    this.securityBeacon,
+    this.isSecureVerified = false,
   });
 
   PeerDevice copyWith({
@@ -26,12 +31,16 @@ class PeerDevice {
     String? name,
     bool? isConnected,
     DateTime? discoveredAt,
+    DiscoveryBeacon? securityBeacon,
+    bool? isSecureVerified,
   }) {
     return PeerDevice(
       id: id ?? this.id,
       name: name ?? this.name,
       isConnected: isConnected ?? this.isConnected,
       discoveredAt: discoveredAt ?? this.discoveredAt,
+      securityBeacon: securityBeacon ?? this.securityBeacon,
+      isSecureVerified: isSecureVerified ?? this.isSecureVerified,
     );
   }
 }
@@ -55,6 +64,8 @@ class P2PService extends ChangeNotifier {
   String? _currentDeviceId;
   String? _errorMessage;
   
+  DeviceIdentityService? _deviceIdentity;
+  
   // Message handler callback
   Function(String endpointId, Map<String, dynamic> message)? onMessageReceived;
 
@@ -72,6 +83,11 @@ class P2PService extends ChangeNotifier {
   void _setError(String error) {
     _errorMessage = error;
     _updateStatus(P2PConnectionStatus.error);
+  }
+
+  Future<void> _initializeDeviceIdentity() async {
+    _deviceIdentity ??= DeviceIdentityService();
+    await _deviceIdentity!.getOrCreateDeviceIdentity();
   }
 
   Future<bool> _checkAndRequestPermissions() async {
@@ -219,6 +235,7 @@ class P2PService extends ChangeNotifier {
         return;
       }
 
+      await _initializeDeviceIdentity();
       _currentDeviceId = _generateDeviceId();
       _discoveredDevices.clear();
       _updateStatus(P2PConnectionStatus.discovering);
@@ -258,6 +275,7 @@ class P2PService extends ChangeNotifier {
         return;
       }
 
+      await _initializeDeviceIdentity();
       _currentDeviceId = _generateDeviceId();
       _updateStatus(P2PConnectionStatus.advertising);
 
